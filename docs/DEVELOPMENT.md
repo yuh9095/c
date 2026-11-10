@@ -139,4 +139,4 @@ Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前已将 exec 握手 fd 接入 Manager poll 主循环；尚未实现服务停止、进程组、超时、重启策略、Unit 配置加载和 Job 提交。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。`ninit_service_runtime_signal_all()` 可向所有已跟踪子进程发送信号，但不负责 waitpid；Manager 在退出清理阶段发送 SIGKILL，并继续通过 exec 握手 fd 与统一 child reaper 处理所有子进程，直到 Runtime 跟踪记录清空。当前尚未实现面向正常 Stop Job 的优雅停止、进程组、超时、重启策略、Unit 配置加载和 Job 提交。
