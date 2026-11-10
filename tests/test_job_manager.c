@@ -18,19 +18,14 @@ int main(void)
     struct ninit_job_info info;
     const struct ninit_unit *unit;
     const char *requires[] = { "a.target", "b.target" };
-    const char *after_a[] = { "a.target" }, *after_b[] = { "b.target" };
+    const char *after_both[] = { "a.target", "b.target" };
     size_t index;
     uint64_t id;
     assert(units && jobs);
     add_target(units, "a.target", NULL, 0, NULL, 0);
     add_target(units, "b.target", NULL, 0, NULL, 0);
-    add_target(units, "root.target", requires, 2, after_a, 1);
-    /* b is also ordered before root, so a and b form the first parallel wave. */
-    {
-        struct ninit_unit_spec root = { "root.target", NULL, NINIT_UNIT_TARGET,
-            NULL, 0, requires, 2, NULL, 0, after_a, 1, NULL, 0 };
-        (void)root;
-    }
+    /* Both prerequisites must finish before root can be dispatched. */
+    add_target(units, "root.target", requires, 2, after_both, 2);
     assert(ninit_dependency_plan_build(units, "root.target", &plan) == 0);
     assert(ninit_job_manager_submit_start(jobs, plan, 2, &id) == 0);
     assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 1);
