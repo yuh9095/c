@@ -1,6 +1,7 @@
 #include <ninit/service_runtime.h>
 
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -77,6 +78,31 @@ ninit_service_runtime_create(struct ninit_job_manager *jobs)
     if (runtime != NULL)
         runtime->jobs = jobs;
     return runtime;
+}
+
+int
+ninit_service_runtime_signal_all(
+    struct ninit_service_runtime *runtime, int signal_number)
+{
+    size_t i;
+    int first_error = 0;
+
+    if (runtime == NULL || signal_number < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for (i = 0; i < runtime->count; ++i) {
+        if (kill(runtime->processes[i].pid, signal_number) < 0 &&
+            errno != ESRCH && first_error == 0)
+            first_error = errno;
+    }
+
+    if (first_error != 0) {
+        errno = first_error;
+        return -1;
+    }
+    return 0;
 }
 
 void
