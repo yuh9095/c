@@ -14,11 +14,28 @@
 static int
 make_path(char *buffer, size_t size, const char *root, const char *path)
 {
+    size_t root_length;
     int n;
-    if (root == NULL || strcmp(root, "/") == 0)
+
+    if (path == NULL || path[0] != '/') {
+        errno = EINVAL;
+        return -1;
+    }
+    if (root == NULL)
+        root = "/";
+    if (root[0] != '/') {
+        errno = EINVAL;
+        return -1;
+    }
+
+    root_length = strlen(root);
+    while (root_length > 1 && root[root_length - 1] == '/')
+        root_length--;
+
+    if (root_length == 1)
         n = snprintf(buffer, size, "%s", path);
     else
-        n = snprintf(buffer, size, "%s%s", root, path);
+        n = snprintf(buffer, size, "%.*s%s", (int) root_length, root, path);
     if (n < 0 || (size_t) n >= size) {
         errno = ENAMETOOLONG;
         return -1;
