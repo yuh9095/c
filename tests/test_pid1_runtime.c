@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <ninit/pid1_runtime.h>
 
 #include <assert.h>
