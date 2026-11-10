@@ -450,6 +450,29 @@ read_effective_capabilities(const char *root, int *cap_admin, int *cap_boot)
     return 0;
 }
 
+static void
+probe_mount_namespace(const char *root,
+                      struct ninit_environment_capabilities *capabilities)
+{
+    char self_path[4096];
+    char pid1_path[4096];
+    struct stat self_ns;
+    struct stat pid1_ns;
+
+    if (make_path(self_path, sizeof(self_path), root,
+                  "/proc/self/ns/mnt") < 0 ||
+        make_path(pid1_path, sizeof(pid1_path), root,
+                  "/proc/1/ns/mnt") < 0)
+        return;
+    if (stat(self_path, &self_ns) < 0 || stat(pid1_path, &pid1_ns) < 0)
+        return;
+
+    capabilities->mount_namespace_available = 1;
+    capabilities->mount_namespace_inode = (uint64_t) self_ns.st_ino;
+    capabilities->mount_namespace_matches_pid1 =
+        self_ns.st_dev == pid1_ns.st_dev && self_ns.st_ino == pid1_ns.st_ino;
+}
+
 int
 ninit_environment_probe_capabilities(
     const char *root,
@@ -465,6 +488,7 @@ ninit_environment_probe_capabilities(
         return -1;
     }
     memset(capabilities, 0, sizeof(*capabilities));
+    probe_mount_namespace(root, capabilities);
 
     if (make_path(full, sizeof(full), root, "/proc/self/mountinfo") == 0) {
         file = fopen(full, "r");
