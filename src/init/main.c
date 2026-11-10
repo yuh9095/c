@@ -115,11 +115,17 @@ report_mount_snapshot(const struct ninit_environment_policy *policy)
                 saved_errno, strerror(saved_errno));
         return;
     }
-    if (!capabilities.mountinfo_available ||
-        ninit_mount_manager_plan("/", policy, &capabilities, &plan) < 0) {
-        int saved_errno = errno != 0 ? errno : EOPNOTSUPP;
+    if (!capabilities.mountinfo_available) {
         fprintf(stderr,
                 "ninit-init: mount state refresh unavailable: "
+                "errno=%d (%s)\n",
+                EOPNOTSUPP, strerror(EOPNOTSUPP));
+        return;
+    }
+    if (ninit_mount_manager_plan("/", policy, &capabilities, &plan) < 0) {
+        int saved_errno = errno;
+        fprintf(stderr,
+                "ninit-init: mount state refresh failed: "
                 "errno=%d (%s)\n",
                 saved_errno, strerror(saved_errno));
         return;
