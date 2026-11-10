@@ -28,6 +28,7 @@ struct unit_file_data {
     struct string_list after;
     struct string_list before;
     struct string_list exec_start;
+    struct string_list exec_stop;
     unsigned int seen;
 };
 
@@ -37,7 +38,8 @@ enum {
     SEEN_WANTS = 1u << 2,
     SEEN_AFTER = 1u << 3,
     SEEN_BEFORE = 1u << 4,
-    SEEN_EXEC_START = 1u << 5
+    SEEN_EXEC_START = 1u << 5,
+    SEEN_EXEC_STOP = 1u << 6
 };
 
 static char *
@@ -198,6 +200,7 @@ free_data(struct unit_file_data *data)
     free_list(&data->after);
     free_list(&data->before);
     free_list(&data->exec_start);
+    free_list(&data->exec_stop);
 }
 
 static int
@@ -240,6 +243,11 @@ parse_property(struct unit_file_data *data, enum section section,
         if (mark_seen(data, SEEN_EXEC_START) < 0)
             return -1;
         return parse_exec_start(value, &data->exec_start);
+    }
+    if (section == SECTION_SERVICE && strcmp(key, "ExecStop") == 0) {
+        if (mark_seen(data, SEEN_EXEC_STOP) < 0)
+            return -1;
+        return parse_exec_start(value, &data->exec_stop);
     }
 
     errno = EINVAL;
@@ -367,6 +375,8 @@ ninit_unit_file_load(struct ninit_unit_manager *manager, const char *path)
     spec.type = type;
     spec.exec_start_argv = (const char *const *) data.exec_start.items;
     spec.exec_start_argc = data.exec_start.count;
+    spec.exec_stop_argv = (const char *const *) data.exec_stop.items;
+    spec.exec_stop_argc = data.exec_stop.count;
     spec.requires = (const char *const *) data.requires.items;
     spec.requires_count = data.requires.count;
     spec.wants = (const char *const *) data.wants.items;
