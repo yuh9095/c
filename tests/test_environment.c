@@ -63,6 +63,28 @@ main(void)
     options.environment_override = NULL;
     options.is_pid1 = 0;
 
+    /* Probe mountinfo and CapEff without performing privileged operations. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    make_file(path,
+        "36 25 0:32 / /proc rw,nosuid - proc proc rw\n"
+        "37 25 0:33 / /sys rw,nosuid - sysfs sysfs rw\n"
+        "38 25 0:34 / /dev rw,nosuid - devtmpfs devtmpfs rw\n"
+        "39 25 0:35 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup rw\n");
+    snprintf(path, sizeof(path), "%s/proc/self/status", root);
+    make_file(path, "Name:\tninit\nCapEff:\t0000000000600000\n");
+    {
+        struct ninit_environment_capabilities capabilities;
+        assert(ninit_environment_probe_capabilities(root, &capabilities) == 0);
+        assert(capabilities.mountinfo_available == 1);
+        assert(capabilities.status_available == 1);
+        assert(capabilities.proc_mounted == 1);
+        assert(capabilities.sys_mounted == 1);
+        assert(capabilities.devtmpfs_mounted == 1);
+        assert(capabilities.cgroup_mounted == 1);
+        assert(capabilities.cap_sys_admin == 1);
+        assert(capabilities.cap_sys_boot == 1);
+    }
+
     /* A visible procfs with no container evidence is host-like. */
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
     make_file(path, "0::/\n");
@@ -143,6 +165,7 @@ main(void)
     snprintf(path, sizeof(path), "%s/run/systemd", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/run", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/1", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self/status", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root); unlink(path);
