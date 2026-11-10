@@ -98,49 +98,35 @@ main(void)
     assert(policy.allow_mount_proc == 0);
     assert(policy.allow_host_shutdown == 0);
 
-    /* Only cgroup path components count; controller names are not evidence. */
-    make_file(path, "5:docker:/user.slice\n");
+    /* systemd does not infer a container from cgroup path names. */
+    make_file(path, "0::/system.slice/docker-0123456789.scope\\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
 
-    /* Recognize a Docker scope in the actual third (path) field. */
-    make_file(path, "0::/system.slice/docker-0123456789.scope\n");
-    assert(ninit_environment_detect(&options, &environment) == 0);
-    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
-    assert(environment.container == NINIT_CONTAINER_DOCKER);
-    assert((environment.evidence & NINIT_ENV_EVIDENCE_CGROUP) != 0);
-
-    /* Generic runtime directories and machine.slice alone are ambiguous. */
-    make_file(path, "0::/user.slice/containers/session.scope\\n");
+    /* The inherited container= variable is authoritative only for PID 1. */
+    options.container_environment = "podman";
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
-    make_file(path, "0::/machine.slice\\n");
-    assert(ninit_environment_detect(&options, &environment) == 0);
-    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
-
-    /* A machine-*.scope beneath machine.slice identifies nspawn. */
-    make_file(path, "0::/machine.slice/machine-test.scope\\n");
-    assert(ninit_environment_detect(&options, &environment) == 0);
-    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
-    assert(environment.container == NINIT_CONTAINER_SYSTEMD_NSPAWN);
-
-    /* libpod scope names identify Podman. */
-    make_file(path, "0::/user.slice/libpod-deadbeef.scope\\n");
+    options.is_pid1 = 1;
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_PODMAN);
+    options.is_pid1 = 0;
+    options.container_environment = NULL;
 
-    /* Conflicting cgroup paths are retained as generic container evidence. */
-    make_file(path,
-        "0::/system.slice/docker-0123456789.scope\n"
-        "1:name=systemd:/user.slice/libpod-deadbeef.scope\n");
+    /* Container manager identification file follows systemd's ordering. */
+    snprintf(path, sizeof(path), "%s/run/host", root); make_dir(path);
+    snprintf(path, sizeof(path), "%s/run/host/container-manager", root);
+    make_file(path, "oci\\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_OTHER);
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/run/host", root); rmdir(path);
 
     /* Clear cgroup evidence before testing the independent PID namespace. */
-    make_file(path, "0::/\n");
-
+    make_file(path, "0::/\\n");
+    options.is_pid1 = 1;
     /* A PID-1 namespace handle that cannot answer NS_GET_PARENT is
      * inconclusive; never classify it as HOST using an inode constant.
      */
