@@ -110,6 +110,23 @@ ninit_manager_supervisor_init(
 }
 
 int
+ninit_manager_supervisor_set_startup_target(
+    struct ninit_manager_supervisor *supervisor,
+    const char *unit_dir,
+    const char *target)
+{
+    if (supervisor == NULL ||
+        ((unit_dir == NULL) != (target == NULL)) ||
+        (unit_dir != NULL && (*unit_dir == '\0' || *target == '\0')) ||
+        supervisor->state != NINIT_MANAGER_STOPPED) {
+        return NINIT_IPC_INVALID_ARGUMENT;
+    }
+    supervisor->unit_dir = unit_dir;
+    supervisor->target = target;
+    return NINIT_IPC_OK;
+}
+
+int
 ninit_manager_supervisor_start(
     struct ninit_manager_supervisor *supervisor,
     const struct timespec *now)
@@ -121,7 +138,8 @@ ninit_manager_supervisor_start(
         return NINIT_IPC_INVALID_ARGUMENT;
     }
 
-    result = ninit_manager_start(supervisor->manager_path,
+    result = ninit_manager_start_with_config(supervisor->manager_path,
+                                 supervisor->unit_dir, supervisor->target,
                                  supervisor->handshake_timeout_ms,
                                  &supervisor->process);
     if (result != NINIT_IPC_OK) {
