@@ -256,3 +256,18 @@ shutdown and host-level cgroup management remain disabled. Container policy
 continues to preserve runtime-provided mounts. These policy flags are advisory:
 future mount and shutdown implementations must inspect the current namespace,
 mount table, capabilities, and syscall results before acting.
+
+
+### Read-only mount and capability probing
+
+`ninit_environment_probe_capabilities()` reads the current process'
+`/proc/self/mountinfo` and `/proc/self/status`. It reports whether proc,
+sysfs, devtmpfs, and cgroup filesystems are mounted, and whether the effective
+capability set contains `CAP_SYS_ADMIN` or `CAP_SYS_BOOT`. Availability
+flags distinguish an unavailable procfs/status source from a capability that
+is present with value zero.
+
+This is a read-only snapshot, not an authorization guarantee. It does not
+attempt a mount or reboot, and the caller must still handle namespace changes,
+capability changes, and syscall failures. PID 1 currently logs the snapshot;
+mount initialization and shutdown have not yet been wired to it.
