@@ -17,7 +17,8 @@ enum ninit_manager_supervisor_state {
 };
 
 /*
- * The caller owns manager_path and must keep it alive for the supervisor.
+ * The caller owns manager_path, unit_dir, and target and must keep them alive
+ * for the supervisor. unit_dir and target are either both set or both NULL.
  * Child reaping remains centralized: the PID 1 SIGCHLD path calls
  * child_exited() after waitpid() has reaped the reported PID.
  */
