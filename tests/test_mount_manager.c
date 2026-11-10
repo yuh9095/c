@@ -28,6 +28,24 @@ record_mount(const char *source, const char *target, const char *filesystem,
     return 0;
 }
 
+static int
+fail_sys_mount(const char *source, const char *target, const char *filesystem,
+               unsigned long flags, const char *data, void *userdata)
+{
+    struct callback_state *state = userdata;
+    (void) source;
+    (void) filesystem;
+    (void) flags;
+    (void) data;
+    state->calls++;
+    snprintf(state->last_target, sizeof(state->last_target), "%s", target);
+    if (strstr(target, "/sys") != NULL) {
+        errno = EBUSY;
+        return -1;
+    }
+    return 0;
+}
+
 static void
 mkdir_path(const char *path)
 {
@@ -135,6 +153,28 @@ main(void)
     assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == 0);
     assert(state.calls == 2);
     assert(strcmp(state.last_target, "/tmp") != 0);
+
+    /* Per-target reporting continues after one mount fails. */
+    {
+        struct ninit_mount_result results[NINIT_MOUNT_PLAN_COUNT];
+        struct callback_state report_state = { 0, "" };
+        int failures = ninit_mount_manager_apply_report(
+            root, &policy, &plan, fail_sys_mount, &report_state,
+            results, NINIT_MOUNT_PLAN_COUNT);
+        assert(failures == 1);
+        assert(results[0].action == NINIT_MOUNT_SKIP);
+        assert(results[0].error_number == 0);
+        assert(results[1].target == NINIT_MOUNT_SYS);
+        assert(results[1].error_number == EBUSY);
+        assert(results[2].target == NINIT_MOUNT_DEV);
+        assert(results[2].error_number == 0);
+        assert(report_state.calls == 2);
+        errno = 0;
+        assert(ninit_mount_manager_apply_report(
+            root, &policy, &plan, fail_sys_mount, &report_state,
+            results, 2) == -1);
+        assert(errno == EINVAL);
+    }
 
     /* Reject truncated or forged plans before invoking any mount callback. */
     {
