@@ -126,7 +126,7 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - 执行器不调用 wait/waitpid。子进程退出状态由 Manager 的统一 child reaper 回收，再按 PID 路由到 Service Runtime。
 - Target 不创建进程，应由 Job 调度层直接完成。
 
-当前 Manager 主循环已接入 SIGCHLD self-pipe 和 Service Runtime 的 child-exit 回调，但尚未把 Unit 加载、Job 提交和 exec 握手 fd 轮询接入主循环；也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
+当前 Manager 主循环已接入 SIGCHLD self-pipe、Service Runtime 的 child-exit 回调，以及服务 exec-error 管道的 poll 监听。exec 成功/失败结果会反馈给 Start Job。尚未接入 Unit 加载和 Job 提交，因此主循环目前还没有自动启动服务；也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
 
 
 ## Service Runtime（第一版）
@@ -134,9 +134,9 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 `include/ninit/service_runtime.h` 将 Job Manager 与 Service Executor 连接起来：
 
 - 从 Start Job 领取一个 Unit；Target 立即完成，Service 则创建子进程并登记 PID、exec 错误管道、Job ID 和 plan index。
-- 事件循环可通过 PID 查询 exec 管道 fd，监听可读事件后调用 `ninit_service_runtime_check_exec()`。
+- 事件循环可通过 `ninit_service_runtime_exec_pending_count()` 和 `ninit_service_runtime_exec_pending_at()` 枚举待处理的 PID/fd，将 exec-error 管道加入 poll；事件就绪后调用 `ninit_service_runtime_check_exec()`。
 - exec 成功才将对应 Unit 的 Start Job 标记成功；exec 失败则把实际 errno 反馈给 Job Manager。
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前尚未实现服务停止、进程组、超时、重启策略、Unit 配置加载、Job 提交和 exec 握手 fd 的主循环接线。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前已将 exec 握手 fd 接入 Manager poll 主循环；尚未实现服务停止、进程组、超时、重启策略、Unit 配置加载和 Job 提交。
