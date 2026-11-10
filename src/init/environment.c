@@ -160,6 +160,60 @@ read_first_line(const char *root, const char *path,
 }
 
 static int
+read_process_environment_value(const char *root, pid_t pid,
+                                const char *name, char *buffer, size_t size)
+{
+    char relative[128];
+    char full[4096];
+    char *entry = NULL;
+    size_t capacity = 0;
+    size_t name_length = strlen(name);
+    FILE *file;
+    ssize_t length;
+    int found = 0;
+
+    if (snprintf(relative, sizeof(relative), "/proc/%ld/environ",
+                 (long) pid) >= (int) sizeof(relative) ||
+        make_path(full, sizeof(full), root, relative) < 0) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    file = fopen(full, "r");
+    if (file == NULL)
+        return -1;
+
+    while ((length = getdelim(&entry, &capacity, '\0', file)) >= 0) {
+        size_t payload_length = (size_t) length;
+        size_t value_length;
+
+        if (payload_length > 0 && entry[payload_length - 1] == '\0')
+            payload_length--;
+        if (payload_length <= name_length ||
+            memcmp(entry, name, name_length) != 0 ||
+            entry[name_length] != '=')
+            continue;
+
+        value_length = payload_length - name_length - 1;
+        if (value_length >= size) {
+            errno = ENAMETOOLONG;
+            found = -1;
+            break;
+        }
+        memcpy(buffer, entry + name_length + 1, value_length);
+        buffer[value_length] = '\0';
+        found = 1;
+        break;
+    }
+    if (found == 0 && ferror(file)) {
+        errno = EIO;
+        found = -1;
+    }
+    free(entry);
+    fclose(file);
+    return found;
+}
+
+static int
 detect_proot_tracer(const char *root)
 {
     char full[4096];
@@ -387,13 +441,25 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     }
 
     /* Non-PID-1 processes use the marker published by PID 1. */
-    if (!environment->is_pid1 &&
-        read_first_line(root, "/run/systemd/container",
-                        value, sizeof(value)) == 0 && value[0] != '\0') {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = container_type_from_hint(root, value);
-        environment->evidence |= NINIT_ENV_EVIDENCE_SYSTEMD_FILE;
-        return 0;
+    if (!environment->is_pid1) {
+        int hint_result = read_first_line(root, "/run/systemd/container",
+                                          value, sizeof(value));
+        if (hint_result == 0 && value[0] != '\0') {
+            environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+            environment->container = container_type_from_hint(root, value);
+            environment->evidence |= NINIT_ENV_EVIDENCE_SYSTEMD_FILE;
+            return 0;
+        }
+
+        /* systemd's final hint reads PID 1 environ when permissions allow. */
+        hint_result = read_process_environment_value(root, 1, "container",
+                                                      value, sizeof(value));
+        if (hint_result > 0 && value[0] != '\0') {
+            environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+            environment->container = container_type_from_hint(root, value);
+            environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;
+            return 0;
+        }
     }
 
     /* Avoid mistaking an OCI base image for Docker when a manager is known. */
