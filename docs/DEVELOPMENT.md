@@ -129,6 +129,18 @@ Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before
 当前 Manager 主循环已接入 SIGCHLD self-pipe、Service Runtime 的 child-exit 回调，以及服务 exec-error 管道的 poll 监听。exec 成功/失败结果会反馈给 Start Job。尚未接入 Unit 加载和 Job 提交，因此主循环目前还没有自动启动服务；也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
 
 
+## Manager 原生启动入口（第一版）
+
+`ninit-manager` 现在接受可选参数：
+
+```sh
+ninit-manager --ipc-fd 3 --unit-dir /etc/ninit/units --target default.target
+```
+
+`--unit-dir` 与 `--target` 必须同时提供。Manager 在 IPC 握手前加载目录中的原生 Unit 文件，检查目标存在，构建 Requires/Wants 激活闭包和 After/Before 排序计划，并提交一个 Start Job（最大并发数暂定为 4）。握手成功后立即派发可运行任务；每次处理 exec/SIGCHLD/IPC 事件后继续派发下一批任务。Unit Manager、Dependency Plan 在整个 Job 生命周期内保持有效。
+
+不提供这两个参数时，Manager 保持原有的仅 IPC/监督模式。当前 PID1 的 `ninit_manager_start()` 尚未提供参数转发，因此这条原生启动路径还不能由 PID1 配置自动启用；下一步需要给 PID1—Manager 启动配置增加显式的 Unit 目录和目标字段，并补充端到端测试。该入口也还没有 sysinit/boot/default 多阶段协调、正常 Stop Job、服务进程组或重启策略。
+
 ## Service Runtime（第一版）
 
 `include/ninit/service_runtime.h` 将 Job Manager 与 Service Executor 连接起来：
