@@ -104,6 +104,17 @@ main(void)
     assert(state.calls == 2);
     assert(strcmp(state.last_target, "/tmp") != 0);
 
+    /* Reject truncated or forged plans before invoking any mount callback. */
+    {
+        size_t saved_count = plan.count;
+        plan.count = 2;
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(errno == EINVAL);
+        assert(state.calls == 2);
+        plan.count = saved_count;
+    }
+
     /* A namespace mismatch blocks a previously valid plan. */
     {
         char other[512];
