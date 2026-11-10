@@ -166,6 +166,9 @@ main(int argc, char **argv)
     if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
         fprintf(stderr, "ninit-init: container environment: %s\n",
                 ninit_container_type_name(environment.container));
+    } else if (environment.kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE) {
+        fprintf(stderr, "ninit-init: virtual machine guest: %s\n",
+                environment.virtual_machine == NINIT_VM_WSL ? "wsl" : "unknown");
     } else if (environment.kind == NINIT_ENVIRONMENT_HOST) {
         fprintf(stderr, "ninit-init: host-like environment\n");
     } else {
