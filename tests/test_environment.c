@@ -94,6 +94,20 @@ main(void)
     assert(policy.allow_mount_proc == 1);
     assert(policy.allow_host_shutdown == 1);
 
+    /*
+     * A PID-1 namespace handle that cannot answer NS_GET_PARENT is
+     * inconclusive; never classify it as HOST using an inode constant.
+     */
+    snprintf(path, sizeof(path), "%s/proc/self/ns", root); make_dir(path);
+    snprintf(path, sizeof(path), "%s/proc/self/ns/pid", root);
+    make_file(path, "not an nsfs handle");
+    options.is_pid1 = 1;
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    options.is_pid1 = 0;
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/proc/self/ns", root); rmdir(path);
+
     /* systemd's marker takes precedence over generic cgroup heuristics. */
     snprintf(path, sizeof(path), "%s/run/systemd/container", root);
     make_file(path, "podman\n");
