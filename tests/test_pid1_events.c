@@ -68,7 +68,6 @@ main(void)
     assert(event_count >= 2);
     assert(signals.child_seen >= 1);
     assert(result.called == 1);
-    assert(result.called == 1);
     assert(WIFEXITED(result.status));
     assert(WEXITSTATUS(result.status) == 37);
 
