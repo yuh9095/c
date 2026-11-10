@@ -21,6 +21,16 @@ enum ninit_mount_option {
     NINIT_MOUNT_OPTION_NOEXEC = 1U << 2
 };
 
+enum ninit_mount_error_class {
+    NINIT_MOUNT_ERROR_PERMISSION = 0,
+    NINIT_MOUNT_ERROR_UNSUPPORTED,
+    NINIT_MOUNT_ERROR_READ_ONLY,
+    NINIT_MOUNT_ERROR_TARGET,
+    NINIT_MOUNT_ERROR_CONFLICT,
+    NINIT_MOUNT_ERROR_INVALID,
+    NINIT_MOUNT_ERROR_IO
+};
+
 enum ninit_mount_target {
     NINIT_MOUNT_PROC = 0,
     NINIT_MOUNT_SYS,
@@ -74,6 +84,8 @@ int ninit_mount_manager_apply(const char *root,
                               ninit_mount_callback callback,
                               void *userdata);
 
+enum ninit_mount_error_class ninit_mount_manager_classify_error(int error_number);
+const char *ninit_mount_error_class_name(enum ninit_mount_error_class error_class);
 const char *ninit_mount_action_name(enum ninit_mount_action action);
 const char *ninit_mount_target_name(enum ninit_mount_target target);
 
