@@ -178,3 +178,36 @@ poll timeout is derived from the next restart deadline so restarts do not
 require periodic busy polling. This is an initial operational entry point;
 console setup, mount setup, sysinit stages, reboot/poweroff syscall handling,
 and a complete shutdown policy remain future work.
+
+
+## Execution environment detection (initial)
+
+`include/ninit/environment.h` exposes an independent environment detector and a
+conservative startup policy. The first implementation follows the layered
+approach used by systemd's `detect_container()` and OpenRC's
+`detect_container()`/`rc_sys` model:
+
+- `/run/systemd/container` and the inherited `container` environment value;
+- Podman and Docker marker files;
+- OpenVZ procfs indicators;
+- cgroup path indicators for Docker, Podman, Kubernetes, LXC and
+  systemd-nspawn;
+- WSL indicators and, as a final PID-1 fallback, the Linux initial PID
+  namespace inode check.
+
+The result records the environment kind, recognized container family and
+evidence bits. Failure to inspect procfs is represented as UNKNOWN, not HOST.
+UNKNOWN and CONTAINER receive a restrictive policy: no host reboot, no
+host cgroup management, and no automatic replacement of proc/sys/dev mounts.
+HOST-like environments receive permission flags for later mount and shutdown
+stages; the flags are not proof that an operation is permitted, and every
+mount operation must still check existing mounts and handle kernel errors.
+
+PID 1 currently performs detection before console setup and reports the
+selected environment. The policy is not yet connected to early mount setup,
+service keyword filtering, or reboot/poweroff syscalls. The next work is to
+add an OpenRC-style administrator override (`rc_sys` equivalent), broaden
+Linux-VServer/UML and namespace/chroot detection, then make mount and shutdown
+operations consume the policy. Do not treat the current detector as a complete
+security boundary or assume that a detected container name proves a specific
+capability set.
