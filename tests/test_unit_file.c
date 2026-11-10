@@ -32,7 +32,8 @@ main(void)
 
     file = fopen(service_path, "w");
     assert(file != NULL);
-    fputs("[Unit]\n"
+    fputs("[Unit]\n[Service]\nExecStart=/bin/echo trailing\\", file);
+    fputc('\n', file);
           "Description=Demo service\n"
           "Requires=base.target\n"
           "Wants=optional.service\n"
