@@ -49,6 +49,7 @@ main(void)
     char root[] = "/tmp/ninit-mount-XXXXXX";
     char path[512];
     char root_alias[512];
+    char root_alias_slash[520];
     struct ninit_environment_policy policy;
     struct ninit_environment_capabilities caps;
     struct ninit_mount_plan plan;
@@ -168,6 +169,11 @@ main(void)
     snprintf(root_alias, sizeof(root_alias), "%s-root-link", root);
     assert(symlink(root, root_alias) == 0);
     assert(ninit_mount_manager_plan(root_alias, &policy, &caps, &plan) == 0);
+    assert(plan.entries[0].action == NINIT_MOUNT_CONFLICT);
+    assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
+    assert(plan.entries[2].action == NINIT_MOUNT_CONFLICT);
+    snprintf(root_alias_slash, sizeof(root_alias_slash), "%s/", root_alias);
+    assert(ninit_mount_manager_plan(root_alias_slash, &policy, &caps, &plan) == 0);
     assert(plan.entries[0].action == NINIT_MOUNT_CONFLICT);
     assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
     assert(plan.entries[2].action == NINIT_MOUNT_CONFLICT);
