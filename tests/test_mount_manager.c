@@ -123,6 +123,64 @@ main(void)
     }
     assert(strstr(state.last_target, "/dev") != NULL);
 
+    /* A symlink mountpoint is a conflict, never followed outside root. */
+    {
+        char real_sys[512];
+        char outside[512];
+        snprintf(real_sys, sizeof(real_sys), "%s/sys-real", root);
+        snprintf(outside, sizeof(outside), "%s/outside", root);
+        assert(rename((snprintf(path, sizeof(path), "%s/sys", root), path),
+                      real_sys) == 0);
+        mkdir_path(outside);
+        snprintf(path, sizeof(path), "%s/sys", root);
+        assert(symlink(outside, path) == 0);
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
+        assert(unlink(path) == 0);
+        assert(rmdir(outside) == 0);
+        assert(rename(real_sys, path) == 0);
+    }
+
+    /* apply revalidates the target and refuses a symlink added after planning. */
+    assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+    {
+        char real_sys[512];
+        char outside[512];
+        snprintf(real_sys, sizeof(real_sys), "%s/sys-real", root);
+        snprintf(outside, sizeof(outside), "%s/outside", root);
+        snprintf(path, sizeof(path), "%s/sys", root);
+        assert(rename(path, real_sys) == 0);
+        mkdir_path(outside);
+        assert(symlink(outside, path) == 0);
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(errno == ELOOP);
+        assert(state.calls == 2);
+        assert(unlink(path) == 0);
+        assert(rmdir(outside) == 0);
+        assert(rename(real_sys, path) == 0);
+    }
+
+    /* Read-only root state is parsed independently from propagation flags. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / ro,relatime - ext4 /dev/root ro\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+    {
+        struct ninit_environment_capabilities observed;
+        assert(ninit_environment_probe_capabilities(root, &observed) == 0);
+        assert(observed.root_mount_found == 1);
+        assert(observed.root_mount_read_only == 1);
+    }
+    write_file(path,
+        "1 0 0:1 / / rw,relatime - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+    {
+        struct ninit_environment_capabilities observed;
+        assert(ninit_environment_probe_capabilities(root, &observed) == 0);
+        assert(observed.root_mount_read_only == 0);
+    }
+
     /* Shared root propagation must block missing mount targets. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path,
