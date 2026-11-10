@@ -225,6 +225,30 @@ container_from_name(const char *name)
 }
 
 
+static enum ninit_container_type
+detect_container_marker_files(const char *root)
+{
+    if (path_exists(root, "/run/.containerenv") > 0)
+        return NINIT_CONTAINER_PODMAN;
+    if (path_exists(root, "/.dockerenv") > 0)
+        return NINIT_CONTAINER_DOCKER;
+    return NINIT_CONTAINER_NONE;
+}
+
+static enum ninit_container_type
+container_type_from_hint(const char *root, const char *name)
+{
+    enum ninit_container_type type = container_from_name(name);
+
+    /* OCI is a format, not a container manager. */
+    if (type == NINIT_CONTAINER_OCI) {
+        type = detect_container_marker_files(root);
+        if (type == NINIT_CONTAINER_NONE)
+            type = NINIT_CONTAINER_OTHER;
+    }
+    return type == NINIT_CONTAINER_NONE ? NINIT_CONTAINER_OTHER : type;
+}
+
 const char *
 ninit_container_type_name(enum ninit_container_type type)
 {
@@ -312,99 +336,7 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     if (proc_status > 0)
         return 0;
 
-    /* systemd's explicit runtime marker has higher precedence than heuristics. */
-    if (read_first_line(root, "/run/systemd/container",
-                        value, sizeof(value)) == 0 && value[0] != '\0') {
-        type = container_from_name(value);
-        if (type == NINIT_CONTAINER_OCI)
-            type = NINIT_CONTAINER_OTHER;
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = type == NINIT_CONTAINER_NONE ?
-                                 NINIT_CONTAINER_OTHER : type;
-        environment->evidence |= NINIT_ENV_EVIDENCE_SYSTEMD_FILE;
-        return 0;
-    }
-
-    /* systemd treats container= as authoritative only for PID 1. */
-    if (environment->is_pid1 && container_env != NULL) {
-        if (container_env[0] == '\0')
-            return 0;
-        type = container_from_name(container_env);
-        if (type == NINIT_CONTAINER_OCI)
-            type = NINIT_CONTAINER_OTHER;
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = type == NINIT_CONTAINER_NONE ?
-                                 NINIT_CONTAINER_OTHER : type;
-        environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;
-        return 0;
-    }
-
-    /* Proot uses ptrace instead of PID namespaces. */
-    if (detect_proot_tracer(root)) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_PROOT;
-        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
-        return 0;
-    }
-
-
-    /* Container managers may publish an unprivileged identification file. */
-    if (read_first_line(root, "/run/host/container-manager",
-                        value, sizeof(value)) == 0 && value[0] != '\0') {
-        type = container_from_name(value);
-        if (type == NINIT_CONTAINER_OCI)
-            type = NINIT_CONTAINER_OTHER;
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = type == NINIT_CONTAINER_NONE ?
-                                 NINIT_CONTAINER_OTHER : type;
-        environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;
-        return 0;
-    }
-
-    if (path_exists(root, "/run/.containerenv") > 0) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_PODMAN;
-        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
-        return 0;
-    }
-    if (path_exists(root, "/.dockerenv") > 0) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_DOCKER;
-        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
-        return 0;
-    }
-
-    /* OpenRC-compatible WSL indicators. */
-    if (path_exists(root, "/proc/sys/fs/binfmt_misc/WSLInterop") > 0 ||
-        getenv("WSL_DISTRO_NAME") != NULL) {
-        environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
-        environment->container = NINIT_CONTAINER_NONE;
-        environment->virtual_machine = NINIT_VM_WSL;
-        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
-        return 0;
-    }
-    if (read_first_line(root, "/proc/sys/kernel/osrelease",
-                        value, sizeof(value)) == 0 &&
-        (strstr(value, "Microsoft") != NULL ||
-         strstr(value, "microsoft") != NULL)) {
-        environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
-        environment->container = NINIT_CONTAINER_NONE;
-        environment->virtual_machine = NINIT_VM_WSL;
-        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
-        return 0;
-    }
-
-    /* OpenVZ's /proc/vz exists on host and guest; /proc/bc is host-only. */
-    if (path_exists(root, "/proc/vz") > 0 &&
-        path_exists(root, "/proc/bc") == 0) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_OPENVZ;
-        environment->evidence |= NINIT_ENV_EVIDENCE_OPENVZ;
-        return 0;
-    }
-
-
-    proc_status = path_exists(root, "/proc/self/status");
+    /* systemd checks OpenVZ and WSL before container-specific hints. */,    if (path_exists(root, "/proc/vz") > 0 &&,        path_exists(root, "/proc/bc") == 0) {,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = NINIT_CONTAINER_OPENVZ;,        environment->evidence |= NINIT_ENV_EVIDENCE_OPENVZ;,        return 0;,    },,    if (path_exists(root, "/proc/sys/fs/binfmt_misc/WSLInterop") > 0 ||,        getenv("WSL_DISTRO_NAME") != NULL ||,        (read_first_line(root, "/proc/sys/kernel/osrelease",,                         value, sizeof(value)) == 0 &&,         (strstr(value, "Microsoft") != NULL ||,          strstr(value, "microsoft") != NULL ||,          strstr(value, "WSL") != NULL))) {,        environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;,        environment->container = NINIT_CONTAINER_NONE;,        environment->virtual_machine = NINIT_VM_WSL;,        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;,        return 0;,    },,    /* Proot uses ptrace instead of PID namespaces. */,    if (detect_proot_tracer(root)) {,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = NINIT_CONTAINER_PROOT;,        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;,        return 0;,    },,    /* The manager-provided hint is the least-privileged reliable source. */,    if (read_first_line(root, "/run/host/container-manager",,                        value, sizeof(value)) == 0 && value[0] != '\0') {,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = container_type_from_hint(root, value);,        environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;,        return 0;,    },,    if (environment->is_pid1 && container_env != NULL) {,        /* An explicitly empty PID-1 value means no container. */,        if (container_env[0] == '\0'),            return 0;,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = container_type_from_hint(root,,                                                           container_env);,        environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;,        return 0;,    },,    /* Non-PID-1 processes use the marker published by PID 1. */,    if (!environment->is_pid1 &&,        read_first_line(root, "/run/systemd/container",,                        value, sizeof(value)) == 0 && value[0] != '\0') {,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = container_type_from_hint(root, value);,        environment->evidence |= NINIT_ENV_EVIDENCE_SYSTEMD_FILE;,        return 0;,    },,    /* Avoid mistaking an OCI base image for Docker when a manager is known. */,    type = detect_container_marker_files(root);,    if (type != NINIT_CONTAINER_NONE) {,        environment->kind = NINIT_ENVIRONMENT_CONTAINER;,        environment->container = type;,        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;,        return 0;,    },,    proc_status = path_exists(root, "/proc/self/status");
     if (proc_status > 0)
         environment->proc_available = 1;
 
