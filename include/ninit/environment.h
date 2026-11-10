@@ -126,6 +126,14 @@ struct ninit_environment_policy {
 void ninit_environment_get_policy(
     const struct ninit_environment *environment,
     struct ninit_environment_policy *policy);
+/*
+ * Authorize a host-level reboot/poweroff operation. Environment classification
+ * alone is insufficient: CAP_SYS_BOOT must also be observable and effective.
+ * Returns 0 when permitted, otherwise -1 with EPERM/EOPNOTSUPP.
+ */
+int ninit_environment_authorize_host_shutdown(
+    const struct ninit_environment_policy *policy,
+    const struct ninit_environment_capabilities *capabilities);
 
 #ifdef __cplusplus
 }
