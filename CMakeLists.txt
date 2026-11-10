@@ -41,6 +41,7 @@ target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
 
 add_library(ninit-manager-core STATIC
     src/manager/unit_manager.c
+    src/manager/unit_file.c
     src/manager/dependency_plan.c
     src/manager/job_manager.c
     src/manager/service_executor.c
@@ -111,6 +112,11 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-unit-manager PRIVATE ninit-manager-core)
     target_compile_options(test-unit-manager PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME unit-manager COMMAND test-unit-manager)
+
+    add_executable(test-unit-file tests/test_unit_file.c)
+    target_link_libraries(test-unit-file PRIVATE ninit-manager-core)
+    target_compile_options(test-unit-file PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME unit-file COMMAND test-unit-file)
 
     add_executable(test-dependency-plan tests/test_dependency_plan.c)
     target_link_libraries(test-dependency-plan PRIVATE ninit-manager-core)
