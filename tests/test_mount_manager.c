@@ -74,7 +74,9 @@ main(void)
     snprintf(path, sizeof(path), "%s/dev", root); mkdir_path(path);
 
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
-    write_file(path, "10 1 0:1 / /proc rw - proc proc rw\n");
+    write_file(path,
+        "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
     snprintf(path, sizeof(path), "%s/proc/self/status", root);
     write_file(path, "Name:\tninit\nCapEff:\t0000000000200000\n");
 
@@ -119,11 +121,34 @@ main(void)
     }
     assert(strstr(state.last_target, "/dev") != NULL);
 
+    /* Shared root propagation must block missing mount targets. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / rw,relatime shared:7 - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+    {
+        struct ninit_environment_capabilities observed;
+        assert(ninit_environment_probe_capabilities(root, &observed) == 0);
+        assert(observed.root_mount_found == 1);
+        assert(observed.root_mount_shared == 1);
+        assert(ninit_mount_manager_plan(root, &policy, &observed, &plan) == 0);
+        assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
+        assert(plan.entries[1].action == NINIT_MOUNT_BLOCKED);
+        assert(plan.entries[2].action == NINIT_MOUNT_BLOCKED);
+    }
+
+    /* Restore a private root mount before stale-plan checks. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+
     /* A stale plan must not mount over a mount added after planning. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path,
-        "10 1 0:1 / /proc rw - proc proc rw\n"
-        "11 1 0:2 / /sys rw - tmpfs tmpfs rw\n");
+        "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n"
+        "11 1 0:3 / /sys rw - tmpfs tmpfs rw\n");
     errno = 0;
     assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
     assert(errno == EBUSY);
