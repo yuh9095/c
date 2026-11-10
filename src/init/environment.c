@@ -4,13 +4,18 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/nsfs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+/* NS_GET_PARENT is defined by Linux nsfs UAPI headers, which some
+ * libc development packages (notably musl) do not install. */
+#ifndef NS_GET_PARENT
+#define NS_GET_PARENT _IO(0xb7, 0x2)
+#endif
 
 static int
 make_path(char *buffer, size_t size, const char *root, const char *path)
