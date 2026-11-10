@@ -161,11 +161,11 @@ default_mount(const char *source, const char *target, const char *filesystem,
 
 static const struct ninit_mount_entry templates[NINIT_MOUNT_PLAN_COUNT] = {
     { NINIT_MOUNT_PROC, NINIT_MOUNT_SKIP, "/proc", "proc", "proc", NULL,
-      MS_NOSUID | MS_NODEV | MS_NOEXEC },
+      MS_NOSUID | MS_NODEV | MS_NOEXEC, 0 },
     { NINIT_MOUNT_SYS, NINIT_MOUNT_SKIP, "/sys", "sysfs", "sysfs", NULL,
-      MS_NOSUID | MS_NODEV | MS_NOEXEC },
+      MS_NOSUID | MS_NODEV | MS_NOEXEC, 0 },
     { NINIT_MOUNT_DEV, NINIT_MOUNT_SKIP, "/dev", "devtmpfs", "devtmpfs",
-      "mode=0755", MS_NOSUID }
+      "mode=0755", MS_NOSUID, 0 }
 };
 
 int
