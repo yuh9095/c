@@ -99,6 +99,44 @@ usage(const char *program)
             program);
 }
 
+static void
+report_mount_snapshot(const struct ninit_environment_policy *policy)
+{
+    struct ninit_environment_capabilities capabilities;
+    struct ninit_mount_plan plan;
+    size_t i;
+
+    memset(&capabilities, 0, sizeof(capabilities));
+    if (ninit_environment_probe_capabilities("/", &capabilities) < 0) {
+        int saved_errno = errno;
+        fprintf(stderr,
+                "ninit-init: mount state refresh failed during capability "
+                "probe: errno=%d (%s)\n",
+                saved_errno, strerror(saved_errno));
+        return;
+    }
+    if (!capabilities.mountinfo_available ||
+        ninit_mount_manager_plan("/", policy, &capabilities, &plan) < 0) {
+        int saved_errno = errno != 0 ? errno : EOPNOTSUPP;
+        fprintf(stderr,
+                "ninit-init: mount state refresh unavailable: "
+                "errno=%d (%s)\n",
+                saved_errno, strerror(saved_errno));
+        return;
+    }
+
+    for (i = 0; i < plan.count; i++) {
+        const struct ninit_mount_entry *entry = &plan.entries[i];
+        fprintf(stderr,
+                "ninit-init: mount state: %s: %s",
+                ninit_mount_target_name(entry->target),
+                ninit_mount_action_name(entry->action));
+        if (entry->action == NINIT_MOUNT_SKIP)
+            fprintf(stderr, " (kernel mountinfo confirms expected filesystem)");
+        fprintf(stderr, "\n");
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -257,6 +295,12 @@ main(int argc, char **argv)
                     }
                 }
             }
+            /*
+             * mountinfo is the authoritative state store. Re-read it after
+             * all attempts so partial success is visible and the next PID 1
+             * startup can independently reconstruct the same state.
+             */
+            report_mount_snapshot(&environment_policy);
         }
     } else {
         int plan_error = errno;
