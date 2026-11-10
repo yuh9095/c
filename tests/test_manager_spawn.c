@@ -47,7 +47,8 @@ main(int argc, char **argv)
 
     ninit_manager_disconnect(&manager);
     for (int i = 0; i < 100; ++i) {
-        result = ninit_manager_reap(&manager, &status);
+        pid_t waited = waitpid(manager.pid, &status, WNOHANG);
+        result = waited == manager.pid ? 1 : (waited == 0 ? 0 : -1);
         if (result == 1) {
             break;
         }
