@@ -33,6 +33,7 @@ add_library(ninit-init STATIC
     src/init/manager_supervisor.c
     src/init/pid1_runtime.c
     src/init/pid1_events.c
+    src/init/boot_coordinator.c
 )
 target_link_libraries(ninit-init PUBLIC ninit-common)
 target_include_directories(ninit-init PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -88,4 +89,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-manager-supervisor PRIVATE ninit-init)
     target_compile_options(test-manager-supervisor PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME manager-supervisor COMMAND test-manager-supervisor $<TARGET_FILE:ninit-manager>)
+
+    add_executable(test-boot-coordinator tests/test_boot_coordinator.c)
+    target_link_libraries(test-boot-coordinator PRIVATE ninit-init)
+    target_compile_options(test-boot-coordinator PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME boot-coordinator COMMAND test-boot-coordinator)
 endif()
