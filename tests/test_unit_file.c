@@ -38,7 +38,7 @@ main(void)
           "Wants=optional.service\n"
           "After=base.target\n"
           "[Service]\n"
-          "ExecStart=/bin/echo \"hello world\" escaped\\ value\n",
+          "ExecStart=/bin/echo \"hello world\" escaped\\ value\n"\n          "ExecStop=/bin/echo \"stopping service\"\n",
           file);
     assert(fclose(file) == 0);
 
