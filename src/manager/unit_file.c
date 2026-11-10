@@ -418,12 +418,19 @@ ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
         return -1;
     directory_length = strlen(directory);
 
-    errno = 0;
-    while ((entry = readdir(dir)) != NULL) {
-        size_t name_length = strlen(entry->d_name);
+    for (;;) {
+        size_t name_length;
         char *copy;
         char **items;
 
+        errno = 0;
+        entry = readdir(dir);
+        if (entry == NULL) {
+            if (errno != 0)
+                goto done;
+            break;
+        }
+        name_length = strlen(entry->d_name);
         if (!((name_length > 8 &&
                strcmp(entry->d_name + name_length - 8, ".service") == 0) ||
               (name_length > 7 &&
@@ -440,8 +447,6 @@ ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
         names = items;
         names[count++] = copy;
     }
-    if (errno != 0)
-        goto done;
 
     if (count > 1)
         qsort(names, count, sizeof(*names), compare_names);
