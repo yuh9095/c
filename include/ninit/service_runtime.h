@@ -36,7 +36,7 @@ int ninit_service_runtime_check_exec(
     struct ninit_service_runtime *runtime, pid_t pid);
 
 /*
- * Called only from PID 1's centralized child-exit callback.
+ * Called from the spawning process's child-exit callback.
  * Does not call waitpid(). Unknown PIDs return -1/ENOENT.
  */
 int ninit_service_runtime_child_exited(
