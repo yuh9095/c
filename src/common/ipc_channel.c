@@ -14,7 +14,7 @@ ninit_ipc_socketpair(int descriptors[2])
         return NINIT_IPC_INVALID_ARGUMENT;
     }
 
-    if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0,
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC | SOCK_NONBLOCK, 0,
                    descriptors) < 0) {
         return NINIT_IPC_IO_ERROR;
     }
@@ -56,6 +56,9 @@ ninit_ipc_send(int fd,
     free(packet);
 
     if (sent < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return NINIT_IPC_WOULD_BLOCK;
+        }
         return NINIT_IPC_IO_ERROR;
     }
     if ((size_t) sent != packet_size) {
@@ -100,6 +103,9 @@ ninit_ipc_receive(int fd,
     } while (received < 0 && errno == EINTR);
 
     if (received < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return NINIT_IPC_WOULD_BLOCK;
+        }
         return NINIT_IPC_IO_ERROR;
     }
     if (received == 0) {
