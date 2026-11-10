@@ -3,6 +3,7 @@
 #include <ninit/manager_supervisor.h>
 #include <ninit/pid1_runtime.h>
 #include <ninit/pid1_setup.h>
+#include <ninit/environment.h>
 
 #include <errno.h>
 #include <signal.h>
@@ -103,6 +104,9 @@ main(int argc, char **argv)
     const char *unit_dir = DEFAULT_UNIT_DIR;
     const char *target = DEFAULT_TARGET;
     struct ninit_pid1_event_source events;
+    struct ninit_environment environment;
+    struct ninit_environment_options environment_options;
+    struct ninit_environment_policy environment_policy;
     struct ninit_manager_supervisor supervisor;
     struct init_context context;
     struct timespec now;
@@ -131,6 +135,23 @@ main(int argc, char **argv)
     if (!ninit_pid1_is_init()) {
         fprintf(stderr, "ninit-init: refusing to run outside PID 1\n");
         return 1;
+    }
+
+    environment_options.root = "/";
+    environment_options.container_environment = getenv("container");
+    environment_options.is_pid1 = 1;
+    if (ninit_environment_detect(&environment_options, &environment) < 0) {
+        perror("ninit-init: detect execution environment");
+        return 1;
+    }
+    ninit_environment_get_policy(&environment, &environment_policy);
+    if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
+        fprintf(stderr, "ninit-init: container environment: %s\n",
+                ninit_container_type_name(environment.container));
+    } else if (environment.kind == NINIT_ENVIRONMENT_HOST) {
+        fprintf(stderr, "ninit-init: host-like environment\n");
+    } else {
+        fprintf(stderr, "ninit-init: unknown environment; restricted policy\n");
     }
 
     if (ninit_pid1_setup_console(console_path) < 0) {
