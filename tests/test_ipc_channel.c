@@ -23,6 +23,12 @@ main(void)
     assert(flags >= 0 && (flags & FD_CLOEXEC) != 0);
     flags = fcntl(fds[1], F_GETFD);
     assert(flags >= 0 && (flags & FD_CLOEXEC) != 0);
+    flags = fcntl(fds[0], F_GETFL);
+    assert(flags >= 0 && (flags & O_NONBLOCK) != 0);
+    flags = fcntl(fds[1], F_GETFL);
+    assert(flags >= 0 && (flags & O_NONBLOCK) != 0);
+    assert(ninit_ipc_receive(fds[1], buffer, sizeof(buffer),
+                             &received, &payload) == NINIT_IPC_WOULD_BLOCK);
 
     assert(ninit_ipc_send(fds[0], &sent, body) == NINIT_IPC_OK);
     assert(ninit_ipc_receive(fds[1], buffer, sizeof(buffer),
