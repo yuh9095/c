@@ -3,6 +3,7 @@
 #include <ninit/manager_child_reaper.h>
 
 #include <assert.h>
+#include <errno.h>
 #include <poll.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -49,7 +50,7 @@ main(void)
     result.expected = child;
     do {
         poll_result = poll(&descriptor, 1, 3000);
-    } while (poll_result < 0);
+    } while (poll_result < 0 && errno == EINTR);
     assert(poll_result == 1);
     assert((descriptor.revents & POLLIN) != 0);
 
