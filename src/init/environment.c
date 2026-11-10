@@ -20,6 +20,9 @@
 #ifndef NS_GET_NSTYPE
 #define NS_GET_NSTYPE _IO(0xb7, 0x3)
 #endif
+#ifndef CLONE_NEWPID
+#define CLONE_NEWPID 0x20000000
+#endif
 
 static int
 make_path(char *buffer, size_t size, const char *root, const char *path)
