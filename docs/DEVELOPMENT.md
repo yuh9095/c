@@ -269,5 +269,19 @@ is present with value zero.
 
 This is a read-only snapshot, not an authorization guarantee. It does not
 attempt a mount or reboot, and the caller must still handle namespace changes,
-capability changes, and syscall failures. PID 1 currently logs the snapshot;
-mount initialization and shutdown have not yet been wired to it.
+capability changes, and syscall failures. PID 1 logs the snapshot and now uses
+it to produce a read-only early mount plan.
+
+
+### Mount Manager（只读规划与显式执行第一版）
+
+`include/ninit/mount_manager.h` 提供三个早期伪文件系统目标的 mount plan：
+
+- `/proc` → `proc`，`/sys` → `sysfs`，`/dev` → `devtmpfs`。
+- 已存在且类型正确的挂载标记为 `skip`；目标已有其他文件系统时标记为 `conflict`，绝不覆盖。
+- 目标缺失时，必须同时满足环境策略允许、mountinfo 可读、CapEff 可读且当前有效集包含 `CAP_SYS_ADMIN`，才会标记为 `mount`；否则标记为 `blocked`。
+- mountpoint 目录必须已经存在。该模块不会自动创建目录、卸载挂载或替换 runtime 提供的挂载。
+- `ninit_mount_manager_apply()` 只执行 plan 中的 mount 项；每次 mount 前重新读取 mountinfo 和有效 capability，拒绝过期计划，并校验目标、文件系统、source、flags 和 mount options 均属于内置白名单。
+- 测试可注入 mount callback；生产调用传 NULL 时使用 Linux `mount(2)`。实际 syscall errno 是最终结果，能力位只是必要条件，不是成功保证。
+
+PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动时改变挂载命名空间。容器/未知环境的策略保持保守，VM/host 只有在 capability 和 mount 状态满足条件时才会规划挂载。下一阶段需进一步验证 mount namespace 身份、挂载传播属性、只读根文件系统及容器运行时约束，再决定是否在 PID1 sysinit 阶段启用显式 apply。
