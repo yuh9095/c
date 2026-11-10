@@ -104,6 +104,20 @@ main(void)
     assert(environment.container == NINIT_CONTAINER_LXC);
     assert((environment.evidence & NINIT_ENV_EVIDENCE_ENVIRONMENT) != 0);
 
+    /* WSL is a Linux guest environment, not a container. */
+    options.container_environment = NULL;
+    snprintf(path, sizeof(path), "%s/proc/sys", root); make_dir(path);
+    snprintf(path, sizeof(path), "%s/proc/sys/kernel", root); make_dir(path);
+    snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root);
+    make_file(path, "6.6.0-microsoft-standard-WSL2\\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE);
+    assert(environment.virtual_machine == NINIT_VM_WSL);
+    assert(environment.container == NINIT_CONTAINER_NONE);
+    ninit_environment_get_policy(&environment, &policy);
+    assert(policy.allow_host_shutdown == 0);
+    assert(policy.allow_host_cgroup_management == 0);
+
     /* Missing procfs and missing markers must not be mistaken for a host. */
     options.container_environment = NULL;
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
@@ -123,6 +137,9 @@ main(void)
     snprintf(path, sizeof(path), "%s/run", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/1", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root); unlink(path);
+    snprintf(path, sizeof(path), "%s/proc/sys/kernel", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/sys", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc", root); rmdir(path);
     assert(rmdir(root) == 0);
     return 0;
