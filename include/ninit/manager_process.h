@@ -24,9 +24,6 @@ int ninit_manager_start(const char *manager_path,
 /* Close the private channel. Manager observes EOF and exits its event loop. */
 void ninit_manager_disconnect(struct ninit_manager_process *process);
 
-/* Nonblocking child reap: 0=still running, 1=reaped, -1=error. */
-int ninit_manager_reap(struct ninit_manager_process *process, int *status);
-
 #ifdef __cplusplus
 }
 #endif
