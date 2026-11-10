@@ -2,6 +2,7 @@
 #define NINIT_MANAGER_PROCESS_H
 
 #include <sys/types.h>
+#include <ninit/ipc_protocol.h>
 
 #ifdef __cplusplus
 extern "C" {
