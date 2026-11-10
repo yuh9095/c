@@ -428,13 +428,11 @@ ninit_mount_manager_apply(const char *root,
         errno = EINVAL;
         return -1;
     }
-    if (callback == NULL)
-        callback = default_mount;
-
     for (i = 0; i < plan->count; i++) {
         const struct ninit_mount_entry *entry = &plan->entries[i];
         char existing_fs[128];
         char target[4096];
+        int target_fd = -1;
         int mounted;
 
         if (entry->action != NINIT_MOUNT_APPLY)
@@ -461,15 +459,6 @@ ninit_mount_manager_apply(const char *root,
             errno = EPERM;
             return -1;
         }
-        {
-            int directory = check_mountpoint_directory(root, entry->path);
-            if (directory < 0)
-                return -1;
-            if (directory == 0) {
-                /* Preserve ELOOP versus ENOTDIR from the fd-relative walk. */
-                return -1;
-            }
-        }
         mounted = find_mount(root, entry->path, existing_fs,
                              sizeof(existing_fs), NULL);
         if (mounted < 0)
@@ -479,11 +468,36 @@ ninit_mount_manager_apply(const char *root,
                     EALREADY : EBUSY;
             return -1;
         }
-        if (make_path(target, sizeof(target), root, entry->path) < 0)
+        target_fd = open_mountpoint_directory(root, entry->path);
+        if (target_fd < 0)
             return -1;
-        if (callback(entry->source, target, entry->filesystem, entry->flags,
-                     entry->data, userdata) < 0)
-            return -1;
+
+        if (callback != NULL) {
+            int callback_result;
+            if (make_path(target, sizeof(target), root, entry->path) < 0) {
+                int saved_errno = errno;
+                close(target_fd);
+                errno = saved_errno;
+                return -1;
+            }
+            callback_result = callback(entry->source, target,
+                                       entry->filesystem, entry->flags,
+                                       entry->data, userdata);
+            {
+                int saved_errno = errno;
+                close(target_fd);
+                errno = saved_errno;
+            }
+            if (callback_result < 0)
+                return -1;
+        } else {
+            int mount_result = mount_with_fd_api(entry, target_fd);
+            int saved_errno = errno;
+            close(target_fd);
+            errno = saved_errno;
+            if (mount_result < 0)
+                return -1;
+        }
     }
     return 0;
 }
