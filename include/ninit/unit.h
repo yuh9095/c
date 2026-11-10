@@ -20,7 +20,8 @@ struct ninit_unit_spec {
     const char *name;
     const char *description;
     enum ninit_unit_type type;
-    const char *exec_start;
+    const char *const *exec_start_argv;
+    size_t exec_start_argc;
     const char *const *requires;
     size_t requires_count;
     const char *const *wants;
@@ -36,7 +37,8 @@ struct ninit_unit {
     char *name;
     char *description;
     enum ninit_unit_type type;
-    char *exec_start;
+    char **exec_start_argv;
+    size_t exec_start_argc;
     char **requires;
     size_t requires_count;
     char **wants;
