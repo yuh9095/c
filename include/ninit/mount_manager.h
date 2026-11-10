@@ -55,8 +55,12 @@ int ninit_mount_manager_plan(
 
 /*
  * Apply only entries marked APPLY. Before each mount, mountinfo and
- * CAP_SYS_ADMIN are rechecked to reject stale plans. A non-NULL callback
- * replaces mount(2), primarily for tests. Existing mounts are never replaced.
+ * CAP_SYS_ADMIN are rechecked to reject stale plans. With callback == NULL,
+ * production uses fsopen/fsconfig/fsmount/mount_setattr/move_mount and binds
+ * the detached mount to an already-open target directory fd. Unsupported
+ * kernels fail closed; there is no mount(2) pathname fallback. A non-NULL
+ * callback replaces the production syscall sequence, primarily for tests.
+ * Existing mounts are never replaced.
  */
 typedef int (*ninit_mount_callback)(
     const char *source, const char *target, const char *filesystem,
