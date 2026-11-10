@@ -100,3 +100,17 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - 排序环路返回 `ELOOP`。计划只保存 manager 所有的只读 Unit 指针，必须在 manager 销毁前释放计划。
 
 该模块只生成计划，不创建 Job、不 fork/exec，也不跟踪服务状态。当前实现使用邻接矩阵表达排序边，适合当前小规模原生 Unit 集合；后续规模扩大时再评估稀疏图结构。
+
+
+## Job Manager（Start Job 第一版）
+
+`include/ninit/job_manager.h` 提供内存中的 Start Job 调度核心：
+
+- 提交时复制 Dependency Plan 中的 Unit 借用指针和 wave 编号；Unit Manager 必须比 Job Manager/Job 活得更久。
+- 每个 Job 可设置最大并发数；同一 wave 可并行派发，后续 wave 必须等待当前 wave 全部完成。
+- 执行器通过 dispatch 领取 Unit，再通过 complete 报告成功或失败。
+- 任一 Unit 启动失败会将 Job 标记 FAILED，并跳过尚未派发的 Unit；已派发任务仍可回报完成。
+- cancel 会跳过未派发任务；已运行任务仍由执行器完成/收尾。
+- Job 状态可查询；Job 记录保留到 Job Manager 销毁。
+
+当前只实现 Start Job 的调度状态机，不执行 fork/exec，不负责服务进程监督，也未实现 Stop/Restart/Reload、Job 合并或跨 Job 冲突处理。失败后已派发的任务由上层执行器负责停止或清理。
