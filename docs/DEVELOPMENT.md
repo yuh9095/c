@@ -309,7 +309,7 @@ PID 1 完成环境检测和只读 capability probe 后，使用同一份环境�
 
 对已经存在且 filesystem 类型正确的挂载，plan 还会报告 mountinfo 第六字段中的有效 VFS 安全选项：`nosuid`、`nodev`、`noexec`。这些值通过 `existing_mount_options` 位标志提供给调用者。`/proc` 和 `/sys` 推荐同时具备三项，`/dev` 至少推荐 `nosuid`；由于运行时可能有意提供不同选项，Ninit 只报告差异，不自动 remount，也不把已有挂载替换掉。新建挂载仍通过固定的 mount flags 设置这些约束。
 
-PID 1 在早期启动阶段调用 `ninit_mount_manager_apply_report()`，逐目标执行计划中标记为 APPLY 的挂载并记录独立结果。一个目标失败不会阻止后续目标尝试；已成功挂载不会回滚。旧的 `ninit_mount_manager_apply()` 接口仍保留 fail-fast 语义。容器/未知环境策略保持保守，所有实际操作仍受当前环境策略、capability、mount namespace、传播属性和根挂载只读状态约束。
+PID 1 在早期启动阶段调用 `ninit_mount_manager_apply_report()`，逐目标执行计划中标记为 APPLY 的挂载并记录独立结果。一个目标失败不会阻止后续目标尝试；已成功挂载不会回滚。旧的 `ninit_mount_manager_apply()` 接口仍保留 fail-fast 语义。容器/未知环境策略保持保守，所有实际操作仍受当前环境策略、capability、mount namespace、传播属性和根挂载只读状态约束。 每轮执行后 PID 1 会重新探测 capability 并重新读取 `/proc/self/mountinfo`，输出内核确认的最终状态。挂载状态不写入独立状态文件：mountinfo 是权威来源，下一次 PID 1 启动会重新规划，已存在且文件系统类型正确的目标自然变为 `skip`，部分成功也能被恢复识别。
 
 
 ### Mount namespace 安全检查
