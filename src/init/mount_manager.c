@@ -256,6 +256,15 @@ ninit_mount_manager_apply(const char *root,
             errno = EPERM;
             return -1;
         }
+        {
+            int directory = check_mountpoint_directory(root, entry->path);
+            if (directory < 0)
+                return -1;
+            if (directory == 0) {
+                errno = ELOOP;
+                return -1;
+            }
+        }
         mounted = find_mount(root, entry->path, existing_fs,
                              sizeof(existing_fs));
         if (mounted < 0)
