@@ -3,8 +3,6 @@
 #include <ninit/pid1_runtime.h>
 
 #include <assert.h>
-#include <errno.h>
-#include <poll.h>
 #include <signal.h>
 #include <stddef.h>
 #include <sys/wait.h>
@@ -47,10 +45,8 @@ main(void)
     struct reap_result result = { -1, 0, 0 };
     struct ninit_pid1_event_source events;
     struct signal_result signals = { 0 };
-    struct pollfd pfd;
     pid_t child;
-    int reaped;
-    int poll_result;
+    int events;
 
     if (getpid() != 1) {
         assert(ninit_pid1_is_init() == 0);
@@ -65,26 +61,16 @@ main(void)
         _exit(37);
     }
 
-    pfd.fd = ninit_pid1_event_source_fd(&events);
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    do {
-        poll_result = poll(&pfd, 1, 3000);
-    } while (poll_result < 0 && errno == EINTR);
-    assert(poll_result == 1);
-    assert((pfd.revents & POLLIN) != 0);
-
-    assert(ninit_pid1_event_source_drain(
-               &events, record_signal, &signals) >= 1);
-    assert(signals.child_seen >= 1);
-
     result.expected_pid = child;
-    reaped = ninit_pid1_reap_children(record_child_exit, &result);
-    assert(reaped == 1);
+    events = ninit_pid1_event_source_wait(
+        &events, 3000, record_signal, &signals,
+        record_child_exit, &result);
+    assert(events >= 2);
+    assert(signals.child_seen >= 1);
+    assert(result.called == 1);
     assert(result.called == 1);
     assert(WIFEXITED(result.status));
     assert(WEXITSTATUS(result.status) == 37);
-    assert(ninit_pid1_reap_children(NULL, NULL) == 0);
 
     ninit_pid1_event_source_destroy(&events);
     return 0;
