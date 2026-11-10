@@ -45,6 +45,7 @@ add_library(ninit-manager-core STATIC
     src/manager/job_manager.c
     src/manager/service_executor.c
     src/manager/service_runtime.c
+    src/manager/child_reaper.c
 )
 target_link_libraries(ninit-manager-core PUBLIC ninit-common)
 target_include_directories(ninit-manager-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -130,4 +131,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-service-runtime PRIVATE ninit-manager-core)
     target_compile_options(test-service-runtime PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME service-runtime COMMAND test-service-runtime)
+
+    add_executable(test-manager-child-reaper tests/test_manager_child_reaper.c)
+    target_link_libraries(test-manager-child-reaper PRIVATE ninit-manager-core)
+    target_compile_options(test-manager-child-reaper PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME manager-child-reaper COMMAND test-manager-child-reaper)
 endif()
