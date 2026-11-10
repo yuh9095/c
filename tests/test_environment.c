@@ -112,6 +112,23 @@ main(void)
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_PROOT);
+    /* A tracer with a different command must not be classified as Proot. */
+    snprintf(path, sizeof(path), "%s/proc/123/comm", root);
+    make_file(path, "strace\n");
+    snprintf(path, sizeof(path), "%s/proc/self/status", root);
+    make_file(path, "Name:\tninit\nTracerPid:\t123\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    /* Malformed and zero tracer IDs are not positive evidence. */
+    snprintf(path, sizeof(path), "%s/proc/123/comm", root);
+    make_file(path, "proot\n");
+    snprintf(path, sizeof(path), "%s/proc/self/status", root);
+    make_file(path, "Name:\tninit\nTracerPid:\t0\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    make_file(path, "Name:\tninit\nTracerPid:\tinvalid\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
     snprintf(path, sizeof(path), "%s/proc/123/comm", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/123", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/self/status", root);
