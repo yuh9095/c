@@ -32,8 +32,7 @@ main(void)
 
     file = fopen(service_path, "w");
     assert(file != NULL);
-    fputs("[Unit]\n[Service]\nExecStart=/bin/echo trailing\\", file);
-    fputc('\n', file);
+    fputs("[Unit]\n"
           "Description=Demo service\n"
           "Requires=base.target\n"
           "Wants=optional.service\n"
@@ -67,7 +66,8 @@ main(void)
 
     file = fopen(broken_path, "w");
     assert(file != NULL);
-    fputs("[Unit]\\n[Service]\\nExecStart=/bin/echo trailing\\\\\\n", file);
+    fputs("[Unit]\n[Service]\nExecStart=/bin/echo trailing\\", file);
+    fputc('\n', file);
     assert(fclose(file) == 0);
     errno = 0;
     assert(ninit_unit_file_load(manager, broken_path) == -1);
