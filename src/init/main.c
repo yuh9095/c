@@ -227,10 +227,21 @@ main(int argc, char **argv)
         if (have_mount_work &&
             ninit_mount_manager_apply("/", &environment_policy, &mount_plan,
                                       NULL, NULL) < 0) {
-            perror("ninit-init: apply pseudo-filesystem mount plan");
+            int mount_error = errno;
+            fprintf(stderr,
+                    "ninit-init: pseudo-filesystem mount failed: "
+                    "class=%s errno=%d (%s); earlier successful mounts "
+                    "are retained, no rollback or pathname fallback attempted\n",
+                    ninit_mount_error_class_name(
+                        ninit_mount_manager_classify_error(mount_error)),
+                    mount_error, strerror(mount_error));
         }
     } else {
-        fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\n");
+        int plan_error = errno;
+        fprintf(stderr,
+                "ninit-init: mount plan unavailable: errno=%d (%s); "
+                "no mount changes attempted\n",
+                plan_error, strerror(plan_error));
     }
 
     if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
