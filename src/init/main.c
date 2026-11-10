@@ -224,17 +224,39 @@ main(int argc, char **argv)
          * intentional: a stale host plan must not authorize mounts if the
          * detected environment policy has become restrictive.
          */
-        if (have_mount_work &&
-            ninit_mount_manager_apply("/", &environment_policy, &mount_plan,
-                                      NULL, NULL) < 0) {
-            int mount_error = errno;
-            fprintf(stderr,
-                    "ninit-init: pseudo-filesystem mount failed: "
-                    "class=%s errno=%d (%s); earlier successful mounts "
-                    "are retained, no rollback or pathname fallback attempted\n",
-                    ninit_mount_error_class_name(
-                        ninit_mount_manager_classify_error(mount_error)),
-                    mount_error, strerror(mount_error));
+        if (have_mount_work) {
+            struct ninit_mount_result mount_results[NINIT_MOUNT_PLAN_COUNT];
+            int failures = ninit_mount_manager_apply_report(
+                "/", &environment_policy, &mount_plan, NULL, NULL,
+                mount_results, NINIT_MOUNT_PLAN_COUNT);
+            if (failures < 0) {
+                int mount_error = errno;
+                fprintf(stderr,
+                        "ninit-init: mount report failed: errno=%d (%s)\n",
+                        mount_error, strerror(mount_error));
+            } else {
+                for (mount_index = 0; mount_index < mount_plan.count;
+                     mount_index++) {
+                    const struct ninit_mount_result *mount_result =
+                        &mount_results[mount_index];
+                    if (mount_result->action == NINIT_MOUNT_APPLY &&
+                        mount_result->error_number == 0) {
+                        fprintf(stderr,
+                                "ninit-init: mount result: %s: applied\n",
+                                ninit_mount_target_name(mount_result->target));
+                    } else if (mount_result->error_number != 0) {
+                        int mount_error = mount_result->error_number;
+                        fprintf(stderr,
+                                "ninit-init: mount result: %s: failed "
+                                "class=%s errno=%d (%s)\n",
+                                ninit_mount_target_name(mount_result->target),
+                                ninit_mount_error_class_name(
+                                    ninit_mount_manager_classify_error(
+                                        mount_error)),
+                                mount_error, strerror(mount_error));
+                    }
+                }
+            }
         }
     } else {
         int plan_error = errno;
