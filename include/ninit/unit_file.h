@@ -14,6 +14,10 @@ extern "C" {
  */
 int ninit_unit_file_load(struct ninit_unit_manager *manager, const char *path);
 
+/* Load .service and .target files in lexical filename order. */
+int ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
+                                   const char *directory);
+
 #ifdef __cplusplus
 }
 #endif
