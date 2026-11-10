@@ -4,7 +4,7 @@
 
 当前仓库是 Ninit 的工程起点，不是可用于启动真实系统的 init 实现。
 
-目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前只处理 PING/PONG 并在私有通道关闭后退出；Unit、Job、服务生命周期、PID 1 主循环和故障恢复尚未实现。不要将当前程序配置为系统 PID 1。
+目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前只处理 PING/PONG 并在私有通道关闭后退出；PID1 侧已有独立的 Manager 监督状态机，支持崩溃后的有界指数退避重启。Unit、Job、服务生命周期、PID 1 主循环和完整故障恢复尚未实现。不要将当前程序配置为系统 PID 1。
 
 ## PID1—Manager 启动流程
 
