@@ -125,6 +125,24 @@ skip_pending(struct job *job)
 }
 
 int
+ninit_job_manager_is_stop(const struct ninit_job_manager *manager,
+                         uint64_t id)
+{
+    struct job *job;
+
+    if (manager == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    job = find_job(manager, id);
+    if (job == NULL) {
+        errno = ENOENT;
+        return -1;
+    }
+    return job->is_stop;
+}
+
+int
 ninit_job_manager_dispatch(struct ninit_job_manager *manager, uint64_t id,
     const struct ninit_unit **unit, size_t *plan_index)
 {
