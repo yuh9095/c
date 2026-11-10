@@ -23,7 +23,9 @@ duplicate_for_child(int fd)
 }
 
 int
-ninit_manager_start(const char *manager_path,
+ninit_manager_start_with_config(const char *manager_path,
+                    const char *unit_dir,
+                    const char *target,
                     int handshake_timeout_ms,
                     struct ninit_manager_process *process)
 {
@@ -32,15 +34,27 @@ ninit_manager_start(const char *manager_path,
     posix_spawn_file_actions_t actions;
     pid_t pid;
     int error;
-    char *const arguments[] = {
-        (char *) manager_path, (char *) "--ipc-fd", (char *) "3", NULL
-    };
+    char *arguments[8];
+    size_t argument_count = 0;
 
-    if (manager_path == NULL || process == NULL || handshake_timeout_ms < 0) {
+    if (manager_path == NULL || process == NULL || handshake_timeout_ms < 0 ||
+        ((unit_dir == NULL) != (target == NULL)) ||
+        (unit_dir != NULL && (*unit_dir == '\0' || *target == '\0'))) {
         return NINIT_IPC_INVALID_ARGUMENT;
     }
     process->pid = -1;
     process->ipc_fd = -1;
+
+    arguments[argument_count++] = (char *) manager_path;
+    arguments[argument_count++] = (char *) "--ipc-fd";
+    arguments[argument_count++] = (char *) "3";
+    if (unit_dir != NULL) {
+        arguments[argument_count++] = (char *) "--unit-dir";
+        arguments[argument_count++] = (char *) unit_dir;
+        arguments[argument_count++] = (char *) "--target";
+        arguments[argument_count++] = (char *) target;
+    }
+    arguments[argument_count] = NULL;
 
     if (ninit_ipc_socketpair(sockets) != NINIT_IPC_OK) {
         return NINIT_IPC_IO_ERROR;
@@ -116,3 +130,12 @@ ninit_manager_disconnect(struct ninit_manager_process *process)
     }
 }
 
+
+int
+ninit_manager_start(const char *manager_path,
+                    int handshake_timeout_ms,
+                    struct ninit_manager_process *process)
+{
+    return ninit_manager_start_with_config(manager_path, NULL, NULL,
+                                           handshake_timeout_ms, process);
+}
