@@ -133,11 +133,22 @@ main(void)
     snprintf(path, sizeof(path), "%s/run/host", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/run/host/container-manager", root);
     make_file(path, "oci\n");
+    options.is_pid1 = 1;
+    options.container_environment = "lxc";
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_OTHER);
+    options.container_environment = NULL;
+    snprintf(path, sizeof(path), "%s/run/.containerenv", root);
+    make_file(path, "");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.container == NINIT_CONTAINER_PODMAN);
+    unlink(path);
+    unlink("/dev/null/ninit-test-nonexistent");
+    snprintf(path, sizeof(path), "%s/run/host/container-manager", root);
     unlink(path);
     snprintf(path, sizeof(path), "%s/run/host", root); rmdir(path);
+    options.is_pid1 = 0;
 
     /* Runtime marker files identify their respective container runtimes. */
     snprintf(path, sizeof(path), "%s/run/.containerenv", root);
