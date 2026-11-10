@@ -143,6 +143,13 @@ main(void)
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_PODMAN);
+    /* PID-1's generic OCI hint is refined by the Podman marker. */
+    options.container_environment = "oci";
+    snprintf(path, sizeof(path), "%s/run/.containerenv", root);
+    make_file(path, "");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.container == NINIT_CONTAINER_PODMAN);
+    unlink(path);
     options.is_pid1 = 0;
     options.container_environment = NULL;
 
