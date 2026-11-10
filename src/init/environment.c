@@ -183,6 +183,38 @@ container_from_name(const char *name)
     return NINIT_CONTAINER_OTHER;
 }
 
+static int
+component_has_prefix(const char *component, size_t length,
+                     const char *prefix)
+{
+    size_t prefix_length = strlen(prefix);
+
+    return length >= prefix_length &&
+           memcmp(component, prefix, prefix_length) == 0;
+}
+
+static enum ninit_container_type
+cgroup_path_component_type(const char *component, size_t length)
+{
+    if ((length == 6 && memcmp(component, "docker", 6) == 0) ||
+        component_has_prefix(component, length, "docker-"))
+        return NINIT_CONTAINER_DOCKER;
+    if ((length == 6 && memcmp(component, "libpod", 6) == 0) ||
+        (length == 10 && memcmp(component, "containers", 10) == 0) ||
+        component_has_prefix(component, length, "libpod-"))
+        return NINIT_CONTAINER_PODMAN;
+    if (length >= 8 && memcmp(component, "kubepods", 8) == 0)
+        return NINIT_CONTAINER_OTHER;
+    if ((length == 3 && memcmp(component, "lxc", 3) == 0) ||
+        component_has_prefix(component, length, "lxc.payload-") ||
+        component_has_prefix(component, length, "lxc.monitor-"))
+        return NINIT_CONTAINER_LXC;
+    if ((length == 12 && memcmp(component, "machine.slice", 12) == 0) ||
+        component_has_prefix(component, length, "machine-"))
+        return NINIT_CONTAINER_SYSTEMD_NSPAWN;
+    return NINIT_CONTAINER_NONE;
+}
+
 static enum ninit_container_type
 detect_cgroup(const char *root)
 {
@@ -198,19 +230,43 @@ detect_cgroup(const char *root)
         return NINIT_CONTAINER_NONE;
 
     while (fgets(line, sizeof(line), file) != NULL) {
-        if (strstr(line, "docker") != NULL)
-            result = NINIT_CONTAINER_DOCKER;
-        else if (strstr(line, "libpod") != NULL ||
-                 strstr(line, "containers") != NULL)
-            result = NINIT_CONTAINER_PODMAN;
-        else if (strstr(line, "kubepods") != NULL)
-            result = NINIT_CONTAINER_OTHER;
-        else if (strstr(line, "lxc") != NULL)
-            result = NINIT_CONTAINER_LXC;
-        else if (strstr(line, "machine.slice") != NULL)
-            result = NINIT_CONTAINER_SYSTEMD_NSPAWN;
-        if (result != NINIT_CONTAINER_NONE)
-            break;
+        char *first_colon = strchr(line, ':');
+        char *second_colon;
+        char *path;
+        char *cursor;
+
+        if (first_colon == NULL)
+            continue;
+        second_colon = strchr(first_colon + 1, ':');
+        if (second_colon == NULL || second_colon[1] != '/')
+            continue;
+
+        /* The third field is the cgroup path; ignore controller names. */
+        path = second_colon + 1;
+        cursor = path;
+        while (*cursor != '\0' && *cursor != '\n' && *cursor != '\r') {
+            char *component;
+            size_t length;
+            enum ninit_container_type candidate;
+
+            while (*cursor == '/')
+                cursor++;
+            component = cursor;
+            while (*cursor != '\0' && *cursor != '/' &&
+                   *cursor != '\n' && *cursor != '\r')
+                cursor++;
+            length = (size_t) (cursor - component);
+            if (length == 0)
+                break;
+
+            candidate = cgroup_path_component_type(component, length);
+            if (candidate == NINIT_CONTAINER_NONE)
+                continue;
+            if (result == NINIT_CONTAINER_NONE)
+                result = candidate;
+            else if (result != candidate)
+                result = NINIT_CONTAINER_OTHER;
+        }
     }
     fclose(file);
     return result;
