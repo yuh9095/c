@@ -232,6 +232,16 @@ main(void)
         assert(observed.root_mount_found == 1);
         assert(observed.root_mount_read_only == 1);
     }
+    /*
+     * A read-only root blocks missing pseudo-filesystem mounts, while an
+     * existing proc mount remains untouched.
+     */
+    caps.root_mount_read_only = 1;
+    assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+    assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
+    assert(plan.entries[1].action == NINIT_MOUNT_BLOCKED);
+    assert(plan.entries[2].action == NINIT_MOUNT_BLOCKED);
+    caps.root_mount_read_only = 0;
     write_file(path,
         "1 0 0:1 / / rw,relatime - ext4 /dev/root rw\n"
         "10 1 0:2 / /proc rw - proc proc rw\n");
