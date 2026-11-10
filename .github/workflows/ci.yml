@@ -1,0 +1,38 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        libc: [glibc, musl]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential
+          if [ "${{ matrix.libc }}" = "musl" ]; then
+            sudo apt-get install -y musl-tools
+          fi
+
+      - name: Configure
+        run: |
+          if [ "${{ matrix.libc }}" = "musl" ]; then
+            cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=musl-gcc
+          else
+            cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=gcc
+          fi
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
