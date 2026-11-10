@@ -178,7 +178,7 @@ find_mount(const char *root, const char *path, char *filesystem,
 
 /*
  * Resolve each component relative to an already-open directory. O_NOFOLLOW
- * prevents symlink traversal during this walk; O_DIRECTORY rejects non-dirs.
+ * opens a symlink itself; fstat then distinguishes it from a real directory.
  * The returned descriptor is closed before mount(2), so this is not yet a
  * race-free mountpoint binding.
  */
