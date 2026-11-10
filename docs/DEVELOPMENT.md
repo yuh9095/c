@@ -4,7 +4,7 @@
 
 当前仓库是 Ninit 的工程起点，不是可用于启动真实系统的 init 实现。
 
-目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前只处理 PING/PONG 并在私有通道关闭后退出；PID1 侧已有独立的 Manager 监督状态机，支持崩溃后的有界指数退避重启。Unit、Job、服务生命周期、PID 1 主循环和完整故障恢复尚未实现。不要将当前程序配置为系统 PID 1。
+目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前只处理 PING/PONG 并在私有通道关闭后退出；PID1 侧已有独立的 Manager 监督状态机，支持崩溃后的有界指数退避重启。Unit、Job、服务生命周期、PID 1 主循环和完整故障恢复尚未实现。新增的 Boot Coordinator 目前只负责按顺序提交 sysinit、boot、default 三个目标，并接收目标完成/失败结果；它尚未连接真实 Job Manager。不要将当前程序配置为系统 PID 1。
 
 ## PID1—Manager 启动流程
 
@@ -58,3 +58,15 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - Job Manager 是服务控制操作的统一调度入口。
 - systemd Unit 兼容层与 Ninit 原生 Unit 模型隔离。
 - 第三方库经评估后接入，不提前引入整套 systemd 依赖。
+
+
+## Boot Coordinator
+
+`include/ninit/boot_coordinator.h` 提供启动目标协调状态机：
+
+1. 调用 `ninit_boot_coordinator_start()` 提交 `sysinit`。
+2. Job Manager 完成目标后，调用 `ninit_boot_coordinator_target_complete()`。
+3. 成功时按顺序提交 `boot`、`default`；任一目标失败则进入 FAILED，不再提交后续目标。
+4. `ninit_boot_coordinator_shutdown()` 阻止继续推进启动序列。
+
+当前模块只定义协调接口和状态转换，submit 回调仍需由未来 Job Manager 实现；它不解析 Unit、不执行服务，也不代表系统已经具备可启动能力。
