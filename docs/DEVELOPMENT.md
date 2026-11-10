@@ -136,7 +136,7 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - 从 Start Job 领取一个 Unit；Target 立即完成，Service 则创建子进程并登记 PID、exec 错误管道、Job ID 和 plan index。
 - 事件循环可通过 PID 查询 exec 管道 fd，监听可读事件后调用 `ninit_service_runtime_check_exec()`。
 - exec 成功才将对应 Unit 的 Start Job 标记成功；exec 失败则把实际 errno 反馈给 Job Manager。
-- PID 1 的统一 child-exit callback 将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。运行时模块不会调用 wait/waitpid。
+- 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
 运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前尚未实现服务停止、进程组、超时、重启策略和 manager 主事件循环的实际接线。
