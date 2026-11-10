@@ -4,9 +4,13 @@
 
 当前仓库是 Ninit 的工程起点，不是可用于启动真实系统的 init 实现。
 
-目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧编解码及单元测试，以及 glibc/musl CI。当前 IPC 代码只处理协议帧，不创建套接字、不启动 Manager，也不执行控制命令。PID 1、Manager 守护进程、Unit、Job 和服务监督尚未实现。不要将当前程序配置为系统 PID 1。
+目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧编解码、Unix SOCK_SEQPACKET 通道封装及单元测试，以及 glibc/musl CI。IPC 通道目前只提供底层通信能力，不启动 Manager，也不执行控制命令。PID 1、Manager 守护进程、Unit、Job 和服务监督尚未实现。不要将当前程序配置为系统 PID 1。
 
 详细帧格式和消息编号见 [IPC 协议规范](IPC-PROTOCOL.md)。
+
+## IPC 协议与传输层
+
+`include/ninit/ipc_channel.h` 提供 `socketpair()`、单帧发送和单帧接收接口。通道使用本地 `AF_UNIX/SOCK_SEQPACKET`，两个端点均设置 `CLOEXEC`。接收端检查完整数据包长度，超出接收缓冲区的消息会被丢弃并报告缓冲区不足。该 API 要求传入的 fd 确实是 SOCK_SEQPACKET 类型；PID 1 仍需负责创建通道、fork/exec 时的 fd 交接及关闭不需要的端点。
 
 ## IPC 协议第一版
 
