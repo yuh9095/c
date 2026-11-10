@@ -89,7 +89,12 @@ ninit_manager_start(const char *manager_path,
     error = ninit_ipc_handshake_init(process->ipc_fd, handshake_timeout_ms);
     if (error != NINIT_IPC_OK) {
         (void) kill(pid, SIGTERM);
-        (void) waitpid(pid, NULL, 0);
+        {
+            pid_t waited;
+            do {
+                waited = waitpid(pid, NULL, 0);
+            } while (waited < 0 && errno == EINTR);
+        }
         close(process->ipc_fd);
         process->pid = -1;
         process->ipc_fd = -1;
