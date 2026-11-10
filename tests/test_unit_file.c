@@ -62,7 +62,7 @@ main(void)
     assert(strcmp(unit->exec_start_argv[0], "/bin/echo") == 0);
     assert(strcmp(unit->exec_start_argv[1], "hello world") == 0);
     assert(strcmp(unit->exec_start_argv[2], "escaped value") == 0);
-    assert(unit->exec_start_argv[3] == NULL);
+    assert(unit->exec_start_argv[3] == NULL);\n    assert(unit->exec_stop_argc == 2);\n    assert(strcmp(unit->exec_stop_argv[0], "/bin/echo") == 0);\n    assert(strcmp(unit->exec_stop_argv[1], "stopping service") == 0);\n    assert(unit->exec_stop_argv[2] == NULL);
 
     file = fopen(broken_path, "w");
     assert(file != NULL);
