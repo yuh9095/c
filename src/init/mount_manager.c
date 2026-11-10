@@ -31,6 +31,10 @@ make_path(char *buffer, size_t size, const char *root, const char *path)
     root_length = strlen(root);
     while (root_length > 1 && root[root_length - 1] == '/')
         root_length--;
+    if (root_length >= size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
 
     if (root_length == 1)
         n = snprintf(buffer, size, "%s", path);
