@@ -12,7 +12,7 @@ main(void)
     const char *exec_argv[] = { "/usr/libexec/networkd" };
     struct ninit_unit_spec service = {
         "network.service", "Network service", NINIT_UNIT_SERVICE,
-        exec_argv, 1, requires, 1, NULL, 0, NULL, 0, NULL, 0
+        exec_argv, 1, requires, 1, NULL, 0, NULL, 0, NULL, 0, NULL, 0
     };
     struct ninit_unit_spec target = {
         "local-fs.target", "Local filesystems", NINIT_UNIT_TARGET,
