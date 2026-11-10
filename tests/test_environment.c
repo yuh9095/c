@@ -61,7 +61,7 @@ main(void)
     options.root = root;
     options.container_environment = NULL;
     options.environment_override = NULL;
-    options.is_pid1 = 1;
+    options.is_pid1 = 0;
 
     /* A visible procfs with no container evidence is host-like. */
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
@@ -124,6 +124,7 @@ main(void)
     assert(policy.allow_host_cgroup_management == 0);
 
     /* Missing procfs and missing markers must not be mistaken for a host. */
+    snprintf(path, sizeof(path), "%s/proc/self/status", root); unlink(path);
     options.container_environment = NULL;
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
     unlink(path);
