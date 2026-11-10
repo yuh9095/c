@@ -199,9 +199,8 @@ cgroup_path_component_type(const char *component, size_t length)
     if ((length == 6 && memcmp(component, "docker", 6) == 0) ||
         component_has_prefix(component, length, "docker-"))
         return NINIT_CONTAINER_DOCKER;
-    if ((length == 6 && memcmp(component, "libpod", 6) == 0) ||
-        (length == 10 && memcmp(component, "containers", 10) == 0) ||
-        component_has_prefix(component, length, "libpod-"))
+    /* Generic containers directories are used by unrelated runtimes. */
+    if (component_has_prefix(component, length, "libpod-"))
         return NINIT_CONTAINER_PODMAN;
     if (length >= 8 && memcmp(component, "kubepods", 8) == 0)
         return NINIT_CONTAINER_OTHER;
@@ -209,8 +208,8 @@ cgroup_path_component_type(const char *component, size_t length)
         component_has_prefix(component, length, "lxc.payload-") ||
         component_has_prefix(component, length, "lxc.monitor-"))
         return NINIT_CONTAINER_LXC;
-    if ((length == 13 && memcmp(component, "machine.slice", 13) == 0) ||
-        component_has_prefix(component, length, "machine-"))
+    /* machine.slice also exists on ordinary systemd hosts. */
+    if (component_has_prefix(component, length, "machine-"))
         return NINIT_CONTAINER_SYSTEMD_NSPAWN;
     return NINIT_CONTAINER_NONE;
 }
