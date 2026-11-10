@@ -540,6 +540,48 @@ ninit_mount_manager_apply(const char *root,
     return 0;
 }
 
+enum ninit_mount_error_class
+ninit_mount_manager_classify_error(int error_number)
+{
+    switch (error_number) {
+    case EPERM:
+    case EACCES:
+        return NINIT_MOUNT_ERROR_PERMISSION;
+    case ENOSYS:
+    case EOPNOTSUPP:
+        return NINIT_MOUNT_ERROR_UNSUPPORTED;
+    case EROFS:
+        return NINIT_MOUNT_ERROR_READ_ONLY;
+    case ENOENT:
+    case ENOTDIR:
+    case ELOOP:
+    case ENAMETOOLONG:
+        return NINIT_MOUNT_ERROR_TARGET;
+    case EBUSY:
+    case EALREADY:
+        return NINIT_MOUNT_ERROR_CONFLICT;
+    case EINVAL:
+        return NINIT_MOUNT_ERROR_INVALID;
+    default:
+        return NINIT_MOUNT_ERROR_IO;
+    }
+}
+
+const char *
+ninit_mount_error_class_name(enum ninit_mount_error_class error_class)
+{
+    switch (error_class) {
+    case NINIT_MOUNT_ERROR_PERMISSION: return "permission-or-policy";
+    case NINIT_MOUNT_ERROR_UNSUPPORTED: return "kernel-api-unsupported";
+    case NINIT_MOUNT_ERROR_READ_ONLY: return "read-only-filesystem";
+    case NINIT_MOUNT_ERROR_TARGET: return "invalid-or-missing-target";
+    case NINIT_MOUNT_ERROR_CONFLICT: return "mount-conflict-or-race";
+    case NINIT_MOUNT_ERROR_INVALID: return "invalid-plan-or-argument";
+    case NINIT_MOUNT_ERROR_IO: return "system-call-or-I/O";
+    }
+    return "unknown";
+}
+
 const char *
 ninit_mount_action_name(enum ninit_mount_action action)
 {
