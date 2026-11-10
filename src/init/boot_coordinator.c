@@ -58,6 +58,7 @@ ninit_boot_coordinator_start(struct ninit_boot_coordinator *coordinator,
 
     coordinator->current_target = NINIT_BOOT_TARGET_SYSINIT;
     coordinator->state = NINIT_BOOT_RUNNING_SYSINIT;
+    errno = 0;
     if (submit(coordinator->current_target, userdata) != 0) {
         coordinator->state = NINIT_BOOT_FAILED;
         coordinator->last_error = errno != 0 ? errno : EIO;
@@ -104,6 +105,7 @@ ninit_boot_coordinator_target_complete(
     }
     coordinator->current_target = following;
     coordinator->state = state_for_target(following);
+    errno = 0;
     if (submit(following, userdata) != 0) {
         coordinator->state = NINIT_BOOT_FAILED;
         coordinator->last_error = errno != 0 ? errno : EIO;
