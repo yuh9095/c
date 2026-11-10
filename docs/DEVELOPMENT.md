@@ -18,6 +18,20 @@ ninit_manager_start() 位于 include/ninit/manager_process.h，由未来 PID 1 �
 
 子进程继承的 fd 3 是唯一有意跨 exec 保留的 IPC 描述符。管理器启动失败或握手失败时，启动函数终止并回收该子进程。正常断开时，PID1 关闭 IPC fd，Manager 在收到通道关闭后退出；PID1 仍须通过 SIGCHLD 路径回收它。
 
+## PID 1 信号事件源
+
+`include/ninit/pid1_runtime.h` 提供 OpenRC self-pipe 风格的信号事件源：
+
+1. 创建 NONBLOCK、CLOEXEC 管道。
+2. 为 SIGCHLD、SIGTERM、SIGINT 和平台提供时的 SIGPWR 安装轻量处理函数。
+3. 处理函数只向管道写入信号编号，并保存/恢复 errno。
+4. PID 1 主事件循环将管道读端加入 poll/ppoll；醒来后在普通上下文 drain 信号并分发。
+5. 每次事件循环醒来后都调用 `ninit_pid1_reap_children()`，统一执行 `waitpid(-1, WNOHANG)`。
+
+当前实现是可测试的事件源原语，不是完整主循环。事件源每个进程只允许一个实例；初始化/销毁由单线程 PID 1 控制。回调不得假定每个标准信号都一一对应：标准信号可能合并，self-pipe 满时处理函数的非阻塞写入也可能失败，因此 SIGCHLD 仅是唤醒提示，统一回收函数才是事实来源。
+
+Manager process API 不再暴露单独的 child reap 接口，避免 Manager 生命周期模块与 PID 1 的全局回收路径竞争。Manager 的退出状态必须由 PID 1 回收后按 PID 路由到 Manager Supervisor。
+
 ## IPC 协议与传输层
 
 include/ninit/ipc_channel.h 提供 socketpair()、单帧发送和单帧接收接口。通道使用本地 AF_UNIX/SOCK_SEQPACKET，两个端点均设置 CLOEXEC 和 NONBLOCK。发送/接收遇到 EAGAIN 时返回 NINIT_IPC_WOULD_BLOCK，由上层事件循环稍后重试。
