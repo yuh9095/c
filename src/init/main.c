@@ -106,6 +106,8 @@ main(int argc, char **argv)
     const char *unit_dir = DEFAULT_UNIT_DIR;
     const char *target = DEFAULT_TARGET;
     const char *environment_override = DEFAULT_ENVIRONMENT;
+    char configured_environment[64];
+    int environment_override_set = 0;
     struct ninit_pid1_event_source events;
     struct ninit_environment environment;
     struct ninit_environment_options environment_options;
@@ -128,6 +130,7 @@ main(int argc, char **argv)
             target = argv[++i];
         } else if (strcmp(argv[i], "--environment") == 0 && i + 1 < argc) {
             environment_override = argv[++i];
+            environment_override_set = 1;
         } else if (strcmp(argv[i], "--help") == 0) {
             usage(argv[0]);
             return 0;
@@ -140,6 +143,15 @@ main(int argc, char **argv)
     if (!ninit_pid1_is_init()) {
         fprintf(stderr, "ninit-init: refusing to run outside PID 1\n");
         return 1;
+    }
+
+    if (!environment_override_set) {
+        if (ninit_environment_load_override("/", configured_environment,
+                                           sizeof(configured_environment)) < 0) {
+            perror("ninit-init: read environment configuration");
+            return 1;
+        }
+        environment_override = configured_environment;
     }
 
     environment_options.root = "/";
