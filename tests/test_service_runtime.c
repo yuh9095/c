@@ -34,6 +34,7 @@ main(void)
     spec.exec_start_argv = argv;
     spec.exec_start_argc = 1;
     assert(ninit_unit_manager_add(units, &spec) == 0);
+    assert(ninit_unit_manager_find(units, "smoke.service")->exec_start_argv[1] == NULL);
     assert(ninit_dependency_plan_build(units, "smoke.service", &plan) == 0);
     assert(ninit_job_manager_submit_start(jobs, plan, 1, &job_id) == 0);
     runtime = ninit_service_runtime_create(jobs);
