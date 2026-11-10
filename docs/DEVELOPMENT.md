@@ -6,6 +6,8 @@
 
 目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧编解码及单元测试，以及 glibc/musl CI。当前 IPC 代码只处理协议帧，不创建套接字、不启动 Manager，也不执行控制命令。PID 1、Manager 守护进程、Unit、Job 和服务监督尚未实现。不要将当前程序配置为系统 PID 1。
 
+详细帧格式和消息编号见 [IPC 协议规范](IPC-PROTOCOL.md)。
+
 ## IPC 协议第一版
 
 协议定义位于 `include/ninit/ipc_protocol.h`，实现位于 `src/common/ipc_protocol.c`。
