@@ -424,9 +424,10 @@ ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
         char *copy;
         char **items;
 
-        if (name_length <= 8 ||
-            (strcmp(entry->d_name + name_length - 8, ".service") != 0 &&
-             strcmp(entry->d_name + name_length - 7, ".target") != 0))
+        if (!((name_length > 8 &&
+               strcmp(entry->d_name + name_length - 8, ".service") == 0) ||
+              (name_length > 7 &&
+               strcmp(entry->d_name + name_length - 7, ".target") == 0)))
             continue;
         copy = strdup(entry->d_name);
         if (copy == NULL)
@@ -442,7 +443,8 @@ ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
     if (errno != 0)
         goto done;
 
-    qsort(names, count, sizeof(*names), compare_names);
+    if (count > 1)
+        qsort(names, count, sizeof(*names), compare_names);
     for (i = 0; i < count; ++i) {
         size_t name_length = strlen(names[i]);
         size_t separator = directory_length > 0 &&
