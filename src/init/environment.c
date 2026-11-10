@@ -372,14 +372,16 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         char namespace_path[4096];
 
         if (make_path(namespace_path, sizeof(namespace_path), root,
-                      "/proc/1/ns/pid") == 0 &&
-            stat(namespace_path, &pid_namespace) == 0) {
-            environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE;
-            if ((unsigned long long) pid_namespace.st_ino != 0xEFFFFFFCULL) {
-                environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-                environment->container = NINIT_CONTAINER_OTHER;
-                return 0;
-            }
+                      "/proc/1/ns/pid") < 0 ||
+            stat(namespace_path, &pid_namespace) < 0) {
+            /* PID 1 without namespace visibility is not safe to call a host. */
+            return 0;
+        }
+        environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE;
+        if ((unsigned long long) pid_namespace.st_ino != 0xEFFFFFFCULL) {
+            environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+            environment->container = NINIT_CONTAINER_OTHER;
+            return 0;
         }
     }
 
