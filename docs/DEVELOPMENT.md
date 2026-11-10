@@ -292,6 +292,10 @@ capability changes, and syscall failures. PID 1 logs the snapshot and now uses
 it to produce a read-only early mount plan.
 
 
+### PID 1 启动时的伪文件系统挂载
+
+PID 1 完成环境检测和只读 capability probe 后，使用同一份环境策略生成 /proc、/sys、/dev 挂载计划，并只对计划中标记为 APPLY 的缺失目标调用 Mount Manager。HOST 和完整 VM guest 可在策略允许且 capability、mount namespace、根挂载传播/只读状态均满足时补齐挂载；CONTAINER、UNKNOWN 不会接管运行时提供的挂载。已有正确挂载保持不变，错误 filesystem、符号链接、非目录目标均不覆盖。执行失败只记录错误，不使用传统 pathname mount(2) 回退，也不擅自改变传播属性。
+
 ### Mount Manager（只读规划与显式执行第一版）
 
 `include/ninit/mount_manager.h` 提供三个早期伪文件系统目标的 mount plan：
