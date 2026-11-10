@@ -182,7 +182,7 @@ detect_proot_tracer(const char *root)
             char *end = NULL;
             errno = 0;
             tracer = strtol(value, &end, 10);
-            found = errno == 0 && end != value && *trim_space(end) == '\\0' &&
+            found = errno == 0 && end != value && *trim_space(end) == '\0' &&
                     tracer > 0 && tracer <= 2147483647L;
             break;
         }
