@@ -26,6 +26,89 @@ make_path(char *buffer, size_t size, const char *root, const char *path)
     return 0;
 }
 
+
+static char *
+trim_space(char *text)
+{
+    char *end;
+
+    while (*text != '\0' && (*text == ' ' || *text == '\t' ||
+                             *text == '\r' || *text == '\n'))
+        text++;
+    end = text + strlen(text);
+    while (end > text && (end[-1] == ' ' || end[-1] == '\t' ||
+                          end[-1] == '\r' || end[-1] == '\n'))
+        *--end = '\0';
+    return text;
+}
+
+int
+ninit_environment_load_override(const char *root, char *buffer,
+                                size_t buffer_size)
+{
+    char full[4096];
+    char line[512];
+    FILE *file;
+    int found = 0;
+
+    if (buffer == NULL || buffer_size < 5) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (make_path(full, sizeof(full), root, "/etc/ninit/environment.conf") < 0)
+        return -1;
+
+    (void) snprintf(buffer, buffer_size, "auto");
+    file = fopen(full, "r");
+    if (file == NULL)
+        return errno == ENOENT ? 0 : -1;
+
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char *entry = trim_space(line);
+        char *value;
+
+        if (*entry == '\0' || *entry == '#')
+            continue;
+        if (strncmp(entry, "Environment", 11) != 0 ||
+            (entry[11] != '=' && entry[11] != ' ' && entry[11] != '\t')) {
+            fclose(file);
+            errno = EINVAL;
+            return -1;
+        }
+        value = entry + 11;
+        while (*value == ' ' || *value == '\t')
+            value++;
+        if (*value != '=') {
+            fclose(file);
+            errno = EINVAL;
+            return -1;
+        }
+        value = trim_space(value + 1);
+        if (*value == '\0' || strchr(value, ' ') != NULL ||
+            strchr(value, '\t') != NULL || found) {
+            fclose(file);
+            errno = EINVAL;
+            return -1;
+        }
+        if (strlen(value) >= buffer_size) {
+            fclose(file);
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        strcpy(buffer, value);
+        found = 1;
+    }
+
+    if (ferror(file)) {
+        int saved = errno != 0 ? errno : EIO;
+        fclose(file);
+        errno = saved;
+        return -1;
+    }
+    fclose(file);
+    return 0;
+}
+
 static int
 path_exists(const char *root, const char *path)
 {
