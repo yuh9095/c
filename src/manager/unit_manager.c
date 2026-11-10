@@ -92,11 +92,12 @@ copy_string_array(char ***destination, const char *const *source,
     if (count == 0) {
         return 0;
     }
-    if (source == NULL || count > SIZE_MAX / sizeof(*items)) {
+    if (source == NULL || count >= SIZE_MAX / sizeof(*items)) {
         errno = EINVAL;
         return -1;
     }
-    items = calloc(count, sizeof(*items));
+    /* Keep argv-style arrays NULL-terminated for execvp(). */
+    items = calloc(count + 1, sizeof(*items));
     if (items == NULL) {
         return -1;
     }
