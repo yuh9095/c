@@ -117,15 +117,16 @@ main(void)
     /* Container manager identification file follows systemd's ordering. */
     snprintf(path, sizeof(path), "%s/run/host", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/run/host/container-manager", root);
-    make_file(path, "oci\\n");
+    make_file(path, "oci\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_OTHER);
     unlink(path);
     snprintf(path, sizeof(path), "%s/run/host", root); rmdir(path);
 
-    /* Clear cgroup evidence before testing the independent PID namespace. */
-    make_file(path, "0::/\\n");
+    /* Reset the cgroup fixture before testing PID namespace evidence. */
+    snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
+    make_file(path, "0::/\n");
     options.is_pid1 = 1;
     /* A PID-1 namespace handle that cannot answer NS_GET_PARENT is
      * inconclusive; never classify it as HOST using an inode constant.
