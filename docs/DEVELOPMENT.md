@@ -86,7 +86,7 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 
 名称目前限制为最多 255 个 ASCII 字母数字字符以及 `_`、`-`、`.`、`@`、`:`。依赖名称在注册时只做语法检查；是否存在、是否形成循环以及实际启动顺序由后续 Dependency Engine 负责。
 
-Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before，以及 [Service] 的 ExecStart；ExecStart 使用轻量引号/反斜杠分词，不调用 shell、不做变量展开。当前只加载单个文件，尚未实现目录扫描、drop-in、环境变量、ExecStartPre/Post 或 systemd/OpenRC 兼容。Unit 状态、完整服务管理仍由后续模块负责。
+Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before，以及 [Service] 的 ExecStart；ExecStart 使用轻量引号/反斜杠分词，不调用 shell、不做变量展开。支持单个文件加载，也支持目录加载；目录中的 .service/.target 文件按文件名排序后注册，遇到错误会停止，但已注册的前序文件不会回滚。尚未实现 drop-in、环境变量、ExecStartPre/Post 或 systemd/OpenRC 兼容。Unit 状态、完整服务管理仍由后续模块负责。
 
 
 ## Dependency Engine（第一版）
