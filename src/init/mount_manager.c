@@ -4,6 +4,7 @@
 #include <ninit/mount_manager.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -175,54 +176,48 @@ find_mount(const char *root, const char *path, char *filesystem,
     return found;
 }
 
-/* Reject symlink mountpoints: mount(2) must not follow a target outside root. */
+/*
+ * Resolve each component relative to an already-open directory. O_NOFOLLOW
+ * prevents symlink traversal during this walk; O_DIRECTORY rejects non-dirs.
+ * The returned descriptor is closed before mount(2), so this is not yet a
+ * race-free mountpoint binding.
+ */
 static int
 check_mountpoint_directory(const char *root, const char *path)
 {
     char full[4096];
-    char prefix[4096];
-    char *cursor;
-    struct stat st;
-    size_t length;
+    char *save = NULL;
+    char *component;
+    int directory_fd;
+    int next_fd;
 
     if (make_path(full, sizeof(full), root, path) < 0)
         return -1;
-    length = strlen(full);
-    if (length == 0 || full[0] != '/') {
-        errno = EINVAL;
-        return -1;
-    }
-    if (length >= sizeof(prefix)) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    memcpy(prefix, full, length + 1);
 
-    /*
-     * Inspect every path component, not just the final mountpoint. This
-     * rejects symlinked roots and parent directories before mount(2).
-     */
-    for (cursor = prefix + 1; ; cursor++) {
-        if (*cursor != '/' && *cursor != '\0')
-            continue;
-        {
-            char saved = *cursor;
-            *cursor = '\0';
-            if (lstat(prefix, &st) < 0)
-                return -1;
-            *cursor = saved;
-            if (S_ISLNK(st.st_mode)) {
-                errno = ELOOP;
+    directory_fd = open("/", O_PATH | O_DIRECTORY | O_CLOEXEC);
+    if (directory_fd < 0)
+        return -1;
+
+    component = strtok_r(full + 1, "/", &save);
+    while (component != NULL) {
+        next_fd = openat(directory_fd, component,
+                         O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (next_fd < 0) {
+            int saved_errno = errno;
+            close(directory_fd);
+            if (saved_errno == ELOOP || saved_errno == ENOTDIR) {
+                errno = saved_errno == ELOOP ? ELOOP : ENOTDIR;
                 return 0;
             }
-            if (!S_ISDIR(st.st_mode)) {
-                errno = ENOTDIR;
-                return 0;
-            }
+            errno = saved_errno;
+            return -1;
         }
-        if (*cursor == '\0')
-            break;
+        close(directory_fd);
+        directory_fd = next_fd;
+        component = strtok_r(NULL, "/", &save);
     }
+
+    close(directory_fd);
     return 1;
 }
 
