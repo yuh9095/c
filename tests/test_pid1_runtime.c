@@ -1,10 +1,10 @@
 #include <ninit/pid1_runtime.h>
 
 #include <assert.h>
-#include <errno.h>
 #include <signal.h>
 #include <stddef.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 struct reap_result {
@@ -43,8 +43,12 @@ main(void)
 
     result.expected_pid = child;
     do {
+        struct timespec pause = { 0, 1000000L };
         reaped = ninit_pid1_reap_children(record_child_exit, &result);
-    } while (reaped == 0 && errno == EINTR);
+        if (reaped == 0) {
+            (void) nanosleep(&pause, NULL);
+        }
+    } while (reaped == 0);
 
     assert(reaped == 1);
     assert(result.called == 1);
