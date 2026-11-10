@@ -112,6 +112,7 @@ main(int argc, char **argv)
     struct ninit_environment environment;
     struct ninit_environment_options environment_options;
     struct ninit_environment_policy environment_policy;
+    struct ninit_environment_capabilities environment_capabilities;
     struct ninit_manager_supervisor supervisor;
     struct init_context context;
     struct timespec now;
@@ -163,6 +164,19 @@ main(int argc, char **argv)
         return 1;
     }
     ninit_environment_get_policy(&environment, &environment_policy);
+    if (ninit_environment_probe_capabilities(
+            "/", &environment_capabilities) == 0) {
+        fprintf(stderr, "ninit-init: capability probe: mountinfo=%s status=%s "
+                "CAP_SYS_ADMIN=%s CAP_SYS_BOOT=%s\n",
+                environment_capabilities.mountinfo_available ? "yes" : "no",
+                environment_capabilities.status_available ? "yes" : "no",
+                environment_capabilities.status_available ?
+                    (environment_capabilities.cap_sys_admin ? "yes" : "no") :
+                    "unknown",
+                environment_capabilities.status_available ?
+                    (environment_capabilities.cap_sys_boot ? "yes" : "no") :
+                    "unknown");
+    }
     if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
         fprintf(stderr, "ninit-init: container environment: %s\n",
                 ninit_container_type_name(environment.container));
