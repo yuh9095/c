@@ -160,6 +160,47 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
     return 1;
 }
 
+
+size_t
+ninit_service_runtime_exec_pending_count(
+    const struct ninit_service_runtime *runtime)
+{
+    size_t i;
+    size_t count = 0;
+
+    if (runtime == NULL)
+        return 0;
+    for (i = 0; i < runtime->count; ++i)
+        if (runtime->processes[i].exec_fd >= 0)
+            ++count;
+    return count;
+}
+
+int
+ninit_service_runtime_exec_pending_at(
+    const struct ninit_service_runtime *runtime, size_t index,
+    pid_t *pid, int *exec_fd)
+{
+    size_t i;
+
+    if (runtime == NULL || pid == NULL || exec_fd == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (i = 0; i < runtime->count; ++i) {
+        if (runtime->processes[i].exec_fd < 0)
+            continue;
+        if (index == 0) {
+            *pid = runtime->processes[i].pid;
+            *exec_fd = runtime->processes[i].exec_fd;
+            return 0;
+        }
+        --index;
+    }
+    errno = ERANGE;
+    return -1;
+}
+
 int
 ninit_service_runtime_exec_fd(
     const struct ninit_service_runtime *runtime, pid_t pid)
