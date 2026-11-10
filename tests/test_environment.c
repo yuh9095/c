@@ -174,8 +174,9 @@ main(void)
     options.environment_override = NULL;
 
 
-    /* OpenRC/systemd-style explicit environment hint is also recognized. */
+    /* systemd trusts container= only when running as PID 1. */
     unlink(path);
+    options.is_pid1 = 1;
     options.container_environment = "lxc";
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.container == NINIT_CONTAINER_LXC);
