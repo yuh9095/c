@@ -140,7 +140,7 @@ main(int argc, char **argv)
     if (argc == 3 && strcmp(argv[1], "--ipc-fd") == 0) {
         errno = 0;
         fd = strtol(argv[2], &end, 10);
-        if (errno != 0 || end == argv[2] || *end != '\\0' ||
+        if (errno != 0 || end == argv[2] || *end != '\0' ||
             fd < 0 || fd > 1048576) {
             fprintf(stderr, "ninit-manager: invalid IPC descriptor\n");
             return 2;
