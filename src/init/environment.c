@@ -413,6 +413,16 @@ ninit_environment_get_policy(const struct ninit_environment *environment,
         policy->allow_mount_devtmpfs = 0;
         policy->allow_host_shutdown = 0;
         policy->allow_host_cgroup_management = 0;
+    } else if (environment->kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE) {
+        /*
+         * A VM is a complete guest OS: guest-local pseudo-filesystems may be
+         * initialized, but host-level shutdown and cgroup control are not.
+         */
+        policy->allow_mount_proc = 1;
+        policy->allow_mount_sys = 1;
+        policy->allow_mount_devtmpfs = 1;
+        policy->allow_host_shutdown = 0;
+        policy->allow_host_cgroup_management = 0;
     }
     /* UNKNOWN deliberately receives the most restrictive policy. */
 }
