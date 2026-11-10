@@ -193,7 +193,10 @@ approach used by systemd's `detect_container()` and OpenRC's
 - cgroup path indicators for Docker, Podman, Kubernetes, LXC and
   systemd-nspawn. The detector parses the third `/proc/1/cgroup` field and
   matches complete path components rather than searching controller names or
-  arbitrary substrings. It scans all entries; conflicting container families
+  arbitrary substrings. Podman requires a `libpod-*` scope (a generic
+  `containers` directory is ambiguous); systemd-nspawn requires a
+  `machine-*` scope rather than `machine.slice` alone, which also appears on
+  ordinary systemd hosts. It scans all entries; conflicting container families
   are retained as generic `OTHER` container evidence instead of selecting
   whichever marker happened to appear first;
 - WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
