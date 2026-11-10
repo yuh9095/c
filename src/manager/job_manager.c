@@ -86,11 +86,12 @@ submit_plan(struct ninit_job_manager *manager,
     for (i = 0; i < count; ++i) {
         job->items[i].unit = ninit_dependency_plan_unit(plan, i);
         job->items[i].wave = ninit_dependency_plan_wave(plan, i);
-        if (is_stop)
-            job->items[i].wave = job->wave_count - 1 - job->items[i].wave;
-        if (job->items[i].unit == NULL || job->items[i].wave >= job->wave_count) {
+        if (job->items[i].unit == NULL || job->wave_count == 0 ||
+            job->items[i].wave >= job->wave_count) {
             free(job->items); free(job); errno = EINVAL; return -1;
         }
+        if (is_stop)
+            job->items[i].wave = job->wave_count - 1 - job->items[i].wave;
     }
     job->next = manager->jobs;
     manager->jobs = job;
