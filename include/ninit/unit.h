@@ -1,0 +1,54 @@
+#ifndef NINIT_UNIT_H
+#define NINIT_UNIT_H
+
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum ninit_unit_type {
+    NINIT_UNIT_SERVICE = 1,
+    NINIT_UNIT_TARGET
+};
+
+/*
+ * Unit specifications are borrowed input. ninit_unit_manager_add() deep-copies
+ * every string and dependency name; callers may release their input afterwards.
+ */
+struct ninit_unit_spec {
+    const char *name;
+    const char *description;
+    enum ninit_unit_type type;
+    const char *exec_start;
+    const char *const *requires;
+    size_t requires_count;
+    const char *const *wants;
+    size_t wants_count;
+    const char *const *after;
+    size_t after_count;
+    const char *const *before;
+    size_t before_count;
+};
+
+/* Unit objects are owned by the manager and remain valid until removal/destruction. */
+struct ninit_unit {
+    char *name;
+    char *description;
+    enum ninit_unit_type type;
+    char *exec_start;
+    char **requires;
+    size_t requires_count;
+    char **wants;
+    size_t wants_count;
+    char **after;
+    size_t after_count;
+    char **before;
+    size_t before_count;
+};
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
