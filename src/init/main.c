@@ -17,6 +17,7 @@
 #define DEFAULT_CONSOLE_PATH "/dev/console"
 #define DEFAULT_UNIT_DIR "/etc/ninit/units"
 #define DEFAULT_TARGET "default.target"
+#define DEFAULT_ENVIRONMENT "auto"
 
 struct init_context {
     struct ninit_manager_supervisor *supervisor;
@@ -93,7 +94,7 @@ usage(const char *program)
 {
     fprintf(stderr,
             "Usage: %s [--console PATH] [--manager PATH] "
-            "[--unit-dir DIR --target NAME]\n",
+            "[--unit-dir DIR --target NAME] [--environment auto|host|container[:TYPE]]\n",
             program);
 }
 
@@ -104,6 +105,7 @@ main(int argc, char **argv)
     const char *manager_path = DEFAULT_MANAGER_PATH;
     const char *unit_dir = DEFAULT_UNIT_DIR;
     const char *target = DEFAULT_TARGET;
+    const char *environment_override = DEFAULT_ENVIRONMENT;
     struct ninit_pid1_event_source events;
     struct ninit_environment environment;
     struct ninit_environment_options environment_options;
@@ -124,6 +126,8 @@ main(int argc, char **argv)
             unit_dir = argv[++i];
         } else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
             target = argv[++i];
+        } else if (strcmp(argv[i], "--environment") == 0 && i + 1 < argc) {
+            environment_override = argv[++i];
         } else if (strcmp(argv[i], "--help") == 0) {
             usage(argv[0]);
             return 0;
@@ -140,6 +144,7 @@ main(int argc, char **argv)
 
     environment_options.root = "/";
     environment_options.container_environment = getenv("container");
+    environment_options.environment_override = environment_override;
     environment_options.is_pid1 = 1;
     if (ninit_environment_detect(&environment_options, &environment) < 0) {
         perror("ninit-init: detect execution environment");
