@@ -326,6 +326,25 @@ main(void)
     assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
     assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
 
+    /*
+     * A plan created under host permissions cannot be applied after the
+     * caller switches to a restrictive container policy.
+     */
+    {
+        struct ninit_environment_policy denied;
+        memset(&denied, 0, sizeof(denied));
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, &denied, &plan,
+                                         record_mount, &state) == -1);
+        assert(errno == EPERM);
+        assert(state.calls == 2);
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, NULL, &plan,
+                                         record_mount, &state) == -1);
+        assert(errno == EINVAL);
+    }
+
     /* Container policy preserves absent runtime mounts and does nothing. */
     memset(&policy, 0, sizeof(policy));
     write_file(path, "");
