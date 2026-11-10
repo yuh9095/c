@@ -40,7 +40,8 @@ enum ninit_environment_evidence {
     NINIT_ENV_EVIDENCE_CGROUP       = 1U << 3,
     NINIT_ENV_EVIDENCE_OPENVZ       = 1U << 4,
     NINIT_ENV_EVIDENCE_NAMESPACE    = 1U << 5,
-    NINIT_ENV_EVIDENCE_OVERRIDE     = 1U << 6
+    NINIT_ENV_EVIDENCE_OVERRIDE     = 1U << 6,
+    NINIT_ENV_EVIDENCE_PID_NAMESPACE = 1U << 7
 };
 
 struct ninit_environment {
@@ -50,6 +51,8 @@ struct ninit_environment {
     unsigned int evidence;
     int proc_available;
     int is_pid1;
+    int pid_namespace_available;
+    int pid_namespace_parent_visible;
 };
 
 /* root is normally "/" and exists primarily to make detection testable. */
