@@ -212,7 +212,7 @@ main(void)
     unlink(path);
     snprintf(path, sizeof(path), "%s/proc/1/environ", root);
     {
-        static const char environ_data[] = "container=lxc\\0PATH=/bin\\0";
+        static const char environ_data[] = "container=lxc\0PATH=/bin\0";
         FILE *file = fopen(path, "wb");
         assert(file != NULL);
         assert(fwrite(environ_data, 1, sizeof(environ_data) - 1, file) ==
