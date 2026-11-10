@@ -80,9 +80,23 @@ stop_service_children(struct ninit_service_runtime *runtime,
                 dispatched = ninit_service_runtime_dispatch(
                     runtime, stop_job_id, NULL);
             } while (dispatched > 0);
-            if (dispatched < 0)
-                fprintf(stderr, "ninit-manager: Stop Job dispatch failed: %s\n",
-                        strerror(errno));
+            if (dispatched < 0) {
+                int dispatch_error = errno;
+                fprintf(stderr,
+                        "ninit-manager: Stop Job dispatch failed: %s\n",
+                        strerror(dispatch_error));
+                /*
+                 * A failed dependency-aware transaction must not leave
+                 * unrelated tracked services running until the hard timeout.
+                 * Fall back to a best-effort TERM broadcast, then retain the
+                 * existing bounded SIGKILL escalation.
+                 */
+                if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+                    fprintf(stderr,
+                            "ninit-manager: fallback SIGTERM failed: %s\n",
+                            strerror(errno));
+                errno = dispatch_error;
+            }
             if (ninit_job_manager_get_info(jobs, stop_job_id, &info) == 0 &&
                 (info.state == NINIT_JOB_SUCCEEDED ||
                  info.state == NINIT_JOB_FAILED ||
