@@ -296,7 +296,7 @@ PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动
 这个比较只证明当前进程与 PID 1 处于同一 mount namespace，**不证明该 namespace 是宿主机初始 namespace**。Linux 没有一个可在所有容器/权限模型下可靠使用的通用“宿主机 mount namespace”标识；因此 Ninit 不会仅凭 inode 常量、namespace 名称或容器类型宣称自己处于 host namespace。环境分类仍由独立的 PID namespace、运行时标记和管理员 override 决定。当前 PID 1 仍然只记录 mount plan，不会自动 apply。
 
 
-Mount Manager 的路径构造器要求 root 和目标均为绝对路径，并拒绝 `.`、`..` 路径组件；root 末尾的多余斜杠会被规范化。对缺失的 `/proc`、`/sys`、`/dev` 目标，随后逐级使用 `lstat()` 检查 root 路径及其全部父级组件：每一级都必须是实际目录，符号链接和非目录组件会标记为 conflict。显式 apply 会在每次 mount 前重新执行同一检查。该检查可拒绝最终目标、父目录或 root 路径中的符号链接，但它仍是路径检查，不能完全消除检查与 `mount(2)` 之间的 TOCTOU 竞态；因此这不是完整的抗竞态路径解析方案。后续若要把 mount apply 用于高对抗环境，应改为基于目录 fd 的受约束路径解析，并使用可将挂载绑定到已打开 mountpoint 的内核接口；在此之前 PID 1 不自动调用 apply。
+Mount Manager 的路径构造器要求 root 和目标均为绝对路径，并拒绝 `.`、`..` 路径组件；root 末尾的多余斜杠会被规范化。对缺失的 `/proc`、`/sys`、`/dev` 目标，随后从 `/` 开始逐级使用 `openat(O_PATH|O_DIRECTORY|O_NOFOLLOW)` 相对于已打开的父目录解析 root 路径及其全部父级组件：每一级都必须是实际目录，符号链接和非目录组件会标记为 conflict。显式 apply 会在每次 mount 前重新执行同一检查。该检查可拒绝最终目标、父目录或 root 路径中的符号链接，但它仍是路径检查，不能完全消除检查与 `mount(2)` 之间的 TOCTOU 竞态；因此这不是完整的抗竞态路径解析方案。后续若要把 mount apply 用于高对抗环境，应改为基于目录 fd 的受约束路径解析，并使用可将挂载绑定到已打开 mountpoint 的内核接口；在此之前 PID 1 不自动调用 apply。
 
 能力快照还从根挂载记录的 mount options 字段读取 `ro`/`rw`，报告 `root_mount_read_only`。该字段目前仅用于准确描述根挂载状态，不会因为 root 为只读就一概阻止挂载：Linux 可以在只读根文件系统中挂载到预先存在的目录，最终仍由 namespace、权限和 mount syscall 决定是否成功。
 
