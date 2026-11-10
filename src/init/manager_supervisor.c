@@ -198,7 +198,8 @@ ninit_manager_supervisor_tick(
         return NINIT_IPC_OK;
     }
 
-    result = ninit_manager_start(supervisor->manager_path,
+    result = ninit_manager_start_with_config(supervisor->manager_path,
+                                 supervisor->unit_dir, supervisor->target,
                                  supervisor->handshake_timeout_ms,
                                  &supervisor->process);
     if (result != NINIT_IPC_OK) {
