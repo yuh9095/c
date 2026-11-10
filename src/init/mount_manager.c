@@ -179,14 +179,9 @@ find_mount(const char *root, const char *path, char *filesystem,
 }
 
 /*
- * Resolve each component relative to an already-open directory. O_NOFOLLOW
- * opens a symlink itself; fstat then distinguishes it from a real directory.
- * The returned descriptor is closed before mount(2), so this is not yet a
- * race-free mountpoint binding.
- */
-/*
- * Resolve every component relative to an open parent directory. The returned
- * descriptor remains bound to the final directory for fd-based mount APIs.
+ * Resolve each component relative to an open parent directory. O_NOFOLLOW
+ * opens a symlink itself; fstat distinguishes it from a real directory. The
+ * final descriptor remains bound to the target for fd-based mount APIs.
  */
 static int
 open_mountpoint_directory(const char *root, const char *path)
