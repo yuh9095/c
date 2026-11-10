@@ -19,6 +19,7 @@ add_library(ninit-common STATIC
     src/common/log.c
     src/common/ipc_protocol.c
     src/common/ipc_channel.c
+    src/common/ipc_handshake.c
 )
 target_include_directories(ninit-common
     PUBLIC
@@ -26,6 +27,11 @@ target_include_directories(ninit-common
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_compile_options(ninit-common PRIVATE -Wall -Wextra -Wpedantic)
+
+add_library(ninit-init STATIC src/init/manager_process.c)
+target_link_libraries(ninit-init PUBLIC ninit-common)
+target_include_directories(ninit-init PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(ninit-manager src/manager/main.c)
 target_link_libraries(ninit-manager PRIVATE ninit-common)
@@ -57,4 +63,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-ipc-channel PRIVATE ninit-common)
     target_compile_options(test-ipc-channel PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ipc-channel COMMAND test-ipc-channel)
+
+    add_executable(test-manager-spawn tests/test_manager_spawn.c)
+    target_link_libraries(test-manager-spawn PRIVATE ninit-init)
+    target_compile_options(test-manager-spawn PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME manager-spawn COMMAND test-manager-spawn $<TARGET_FILE:ninit-manager>)
 endif()
