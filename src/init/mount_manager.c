@@ -416,6 +416,7 @@ ninit_mount_manager_plan(const char *root,
 
 int
 ninit_mount_manager_apply(const char *root,
+                          const struct ninit_environment_policy *policy,
                           const struct ninit_mount_plan *plan,
                           ninit_mount_callback callback,
                           void *userdata)
@@ -423,7 +424,8 @@ ninit_mount_manager_apply(const char *root,
     struct ninit_environment_capabilities caps;
     size_t i;
 
-    if (plan == NULL || plan->count != NINIT_MOUNT_PLAN_COUNT) {
+    if (policy == NULL || plan == NULL ||
+        plan->count != NINIT_MOUNT_PLAN_COUNT) {
         errno = EINVAL;
         return -1;
     }
@@ -442,8 +444,17 @@ ninit_mount_manager_apply(const char *root,
         int target_fd = -1;
         int mounted;
 
+        int allowed;
+
         if (entry->action != NINIT_MOUNT_APPLY)
             continue;
+        allowed = i == NINIT_MOUNT_PROC ? policy->allow_mount_proc :
+                  i == NINIT_MOUNT_SYS ? policy->allow_mount_sys :
+                                         policy->allow_mount_devtmpfs;
+        if (!allowed) {
+            errno = EPERM;
+            return -1;
+        }
         if (i >= NINIT_MOUNT_PLAN_COUNT ||
             entry->target != templates[i].target ||
             entry->path == NULL || entry->filesystem == NULL ||
