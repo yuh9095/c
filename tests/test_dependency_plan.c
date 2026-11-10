@@ -8,7 +8,7 @@ static void add_target(struct ninit_unit_manager *m, const char *name,
  const char *const *after, size_t na, const char *const *before, size_t nb)
 {
     struct ninit_unit_spec s = { name, NULL, NINIT_UNIT_TARGET, NULL, 0,
-        req, nr, wants, nw, after, na, before, nb };
+        req, nr, wants, nw, after, na, before, nb, NULL, 0 };
     assert(ninit_unit_manager_add(m, &s) == 0);
 }
 
