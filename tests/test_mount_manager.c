@@ -168,8 +168,14 @@ main(void)
         char real_sys[512];
         snprintf(real_sys, sizeof(real_sys), "%s/sys-dir", root);
         snprintf(path, sizeof(path), "%s/sys", root);
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        assert(plan.entries[1].action == NINIT_MOUNT_APPLY);
         assert(rename(path, real_sys) == 0);
         write_file(path, "not a directory");
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(errno == ENOTDIR);
+        assert(state.calls == 2);
         assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
         assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
         assert(unlink(path) == 0);
