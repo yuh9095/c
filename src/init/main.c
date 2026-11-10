@@ -4,6 +4,7 @@
 #include <ninit/pid1_runtime.h>
 #include <ninit/pid1_setup.h>
 #include <ninit/environment.h>
+#include <ninit/mount_manager.h>
 
 #include <errno.h>
 #include <signal.h>
@@ -113,6 +114,7 @@ main(int argc, char **argv)
     struct ninit_environment_options environment_options;
     struct ninit_environment_policy environment_policy;
     struct ninit_environment_capabilities environment_capabilities;
+    struct ninit_mount_plan mount_plan;
     struct ninit_manager_supervisor supervisor;
     struct init_context context;
     struct timespec now;
@@ -177,6 +179,21 @@ main(int argc, char **argv)
                     (environment_capabilities.cap_sys_boot ? "yes" : "no") :
                     "unknown");
     }
+    if (environment_capabilities.mountinfo_available &&
+        ninit_mount_manager_plan("/", &environment_policy,
+                                 &environment_capabilities, &mount_plan) == 0) {
+        size_t mount_index;
+        for (mount_index = 0; mount_index < mount_plan.count; mount_index++) {
+            const struct ninit_mount_entry *entry =
+                &mount_plan.entries[mount_index];
+            fprintf(stderr, "ninit-init: mount plan: %s -> %s (%s)\\n",
+                    entry->path, entry->filesystem,
+                    ninit_mount_action_name(entry->action));
+        }
+    } else {
+        fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\\n");
+    }
+
     if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
         fprintf(stderr, "ninit-init: container environment: %s\n",
                 ninit_container_type_name(environment.container));
