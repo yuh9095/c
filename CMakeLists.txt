@@ -31,6 +31,7 @@ target_compile_options(ninit-common PRIVATE -Wall -Wextra -Wpedantic)
 add_library(ninit-init STATIC
     src/init/manager_process.c
     src/init/manager_supervisor.c
+    src/init/pid1_runtime.c
 )
 target_link_libraries(ninit-init PUBLIC ninit-common)
 target_include_directories(ninit-init PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -66,6 +67,11 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-ipc-channel PRIVATE ninit-common)
     target_compile_options(test-ipc-channel PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ipc-channel COMMAND test-ipc-channel)
+
+    add_executable(test-pid1-runtime tests/test_pid1_runtime.c)
+    target_link_libraries(test-pid1-runtime PRIVATE ninit-init)
+    target_compile_options(test-pid1-runtime PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME pid1-runtime COMMAND test-pid1-runtime)
 
     add_executable(test-manager-spawn tests/test_manager_spawn.c)
     target_link_libraries(test-manager-spawn PRIVATE ninit-init)
