@@ -425,8 +425,7 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         return 0;
     }
 
-    if (environment->proc_available)
-        environment->kind = NINIT_ENVIRONMENT_HOST;
+    /* procfs availability alone cannot prove the initial host namespaces. */
     return 0;
 }
 
