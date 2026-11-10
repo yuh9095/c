@@ -283,6 +283,14 @@ main(void)
         assert(plan.entries[2].action == NINIT_MOUNT_BLOCKED);
     }
 
+    /* Build an APPLY plan from a writable, private root first. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+    assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+    assert(plan.entries[1].action == NINIT_MOUNT_APPLY);
+
     /* A root becoming read-only after planning invalidates the plan. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path,
