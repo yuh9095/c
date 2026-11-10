@@ -191,7 +191,11 @@ approach used by systemd's `detect_container()` and OpenRC's
 - Podman and Docker marker files;
 - OpenVZ procfs indicators;
 - cgroup path indicators for Docker, Podman, Kubernetes, LXC and
-  systemd-nspawn;
+  systemd-nspawn. The detector parses the third `/proc/1/cgroup` field and
+  matches complete path components rather than searching controller names or
+  arbitrary substrings. It scans all entries; conflicting container families
+  are retained as generic `OTHER` container evidence instead of selecting
+  whichever marker happened to appear first;
 - WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
   verifies that the opened handle is a PID namespace; only then is namespace
   evidence recorded. A visible parent proves the current PID namespace is
