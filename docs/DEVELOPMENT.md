@@ -28,7 +28,7 @@ ninit_manager_start() 位于 include/ninit/manager_process.h，由未来 PID 1 �
 4. PID 1 主事件循环将管道读端加入 poll/ppoll；醒来后在普通上下文 drain 信号并分发。
 5. 每次事件循环醒来后都调用 `ninit_pid1_reap_children()`，统一执行 `waitpid(-1, WNOHANG)`。
 
-当前实现是可测试的事件源原语，不是完整主循环。事件源每个进程只允许一个实例；初始化/销毁由单线程 PID 1 控制。回调不得假定每个标准信号都一一对应：标准信号可能合并，self-pipe 满时处理函数的非阻塞写入也可能失败，因此 SIGCHLD 仅是唤醒提示，统一回收函数才是事实来源。
+当前实现提供一次 poll-based 事件循环迭代：等待信号管道、在普通上下文分发信号，并在每次唤醒后统一回收子进程。它尚未接入 Manager IPC、监督器定时器或 Boot/Shutdown Coordinator，因此不是完整 PID 1 主循环。事件源每个进程只允许一个实例；初始化/销毁由单线程 PID 1 控制。回调不得假定每个标准信号都一一对应：标准信号可能合并，self-pipe 满时处理函数的非阻塞写入也可能失败，因此 SIGCHLD 仅是唤醒提示，统一回收函数才是事实来源。
 
 Manager process API 不再暴露单独的 child reap 接口，避免 Manager 生命周期模块与 PID 1 的全局回收路径竞争。Manager 的退出状态必须由 PID 1 回收后按 PID 路由到 Manager Supervisor。
 
