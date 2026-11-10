@@ -110,6 +110,26 @@ main(void)
     assert(environment.container == NINIT_CONTAINER_DOCKER);
     assert((environment.evidence & NINIT_ENV_EVIDENCE_CGROUP) != 0);
 
+    /* Generic runtime directories and machine.slice alone are ambiguous. */
+    make_file(path, "0::/user.slice/containers/session.scope\\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    make_file(path, "0::/machine.slice\\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+
+    /* A machine-*.scope beneath machine.slice identifies nspawn. */
+    make_file(path, "0::/machine.slice/machine-test.scope\\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_SYSTEMD_NSPAWN);
+
+    /* libpod scope names identify Podman. */
+    make_file(path, "0::/user.slice/libpod-deadbeef.scope\\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_PODMAN);
+
     /* Conflicting cgroup paths are retained as generic container evidence. */
     make_file(path,
         "0::/system.slice/docker-0123456789.scope\n"
