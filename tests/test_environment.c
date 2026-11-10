@@ -98,8 +98,27 @@ main(void)
     assert(policy.allow_mount_proc == 0);
     assert(policy.allow_host_shutdown == 0);
 
-    /*
-     * A PID-1 namespace handle that cannot answer NS_GET_PARENT is
+    /* Only cgroup path components count; controller names are not evidence. */
+    make_file(path, "5:docker:/user.slice\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+
+    /* Recognize a Docker scope in the actual third (path) field. */
+    make_file(path, "0::/system.slice/docker-0123456789.scope\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_DOCKER);
+    assert((environment.evidence & NINIT_ENV_EVIDENCE_CGROUP) != 0);
+
+    /* Conflicting cgroup paths are retained as generic container evidence. */
+    make_file(path,
+        "0::/system.slice/docker-0123456789.scope\n"
+        "1:name=systemd:/user.slice/libpod-deadbeef.scope\n");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_OTHER);
+
+    /* A PID-1 namespace handle that cannot answer NS_GET_PARENT is
      * inconclusive; never classify it as HOST using an inode constant.
      */
     snprintf(path, sizeof(path), "%s/proc/self/ns", root); make_dir(path);
