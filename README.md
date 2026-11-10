@@ -126,7 +126,7 @@ cmake --build build-musl
 ctest --test-dir build-musl --output-on-failure
 ```
 
-更多开发约束和当前实现状态见 [开发说明](docs/DEVELOPMENT.md)。
+更多开发约束见 [开发说明](docs/DEVELOPMENT.md)，IPC 帧格式见 [IPC 协议文档](docs/IPC-PROTOCOL.md)。
 
 ## 开发路线
 
