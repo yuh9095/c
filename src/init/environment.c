@@ -142,7 +142,7 @@ apply_environment_override(const char *override,
 {
     enum ninit_container_type type;
 
-    if (override == NULL || override[0] == '\\0' ||
+    if (override == NULL || override[0] == '\0' ||
         strcmp(override, "auto") == 0)
         return 0;
 
