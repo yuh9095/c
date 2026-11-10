@@ -500,6 +500,7 @@ ninit_environment_probe_capabilities(
                 char *mountpoint = NULL;
                 char *separator = NULL;
                 char *filesystem = NULL;
+                int root_shared = 0;
                 unsigned int field = 0;
 
                 token = strtok_r(line, " ", &save);
@@ -507,6 +508,8 @@ ninit_environment_probe_capabilities(
                     field++;
                     if (field == 5)
                         mountpoint = token;
+                    else if (field > 6 && strncmp(token, "shared:", 7) == 0)
+                        root_shared = 1;
                     if (strcmp(token, "-") == 0) {
                         separator = token;
                         filesystem = strtok_r(NULL, " ", &save);
@@ -521,6 +524,11 @@ ninit_environment_probe_capabilities(
                 filesystem[strcspn(filesystem, "\r\n")] = '\0';
                 decode_mount_field(mountpoint);
 
+                if (strcmp(mountpoint, "/") == 0) {
+                    capabilities->root_mount_found = 1;
+                    if (root_shared)
+                        capabilities->root_mount_shared = 1;
+                }
                 if (strcmp(mountpoint, "/proc") == 0 &&
                     strcmp(filesystem, "proc") == 0)
                     capabilities->proc_mounted = 1;
