@@ -285,3 +285,10 @@ it to produce a read-only early mount plan.
 - 测试可注入 mount callback；生产调用传 NULL 时使用 Linux `mount(2)`。实际 syscall errno 是最终结果，能力位只是必要条件，不是成功保证。
 
 PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动时改变挂载命名空间。容器/未知环境的策略保持保守，VM/host 只有在 capability 和 mount 状态满足条件时才会规划挂载。下一阶段需进一步验证 mount namespace 身份、挂载传播属性、只读根文件系统及容器运行时约束，再决定是否在 PID1 sysinit 阶段启用显式 apply。
+
+
+### Mount namespace 安全检查
+
+环境能力快照额外记录 `/proc/self/ns/mnt` 与 `/proc/1/ns/mnt` 的可见性、inode 和设备号比较结果。Mount Manager 的显式 apply 要求两者都可读取且指向同一个 namespace；若无法读取或与 PID 1 不一致，则拒绝执行。
+
+这个比较只证明当前进程与 PID 1 处于同一 mount namespace，**不证明该 namespace 是宿主机初始 namespace**。Linux 没有一个可在所有容器/权限模型下可靠使用的通用“宿主机 mount namespace”标识；因此 Ninit 不会仅凭 inode 常量、namespace 名称或容器类型宣称自己处于 host namespace。环境分类仍由独立的 PID namespace、运行时标记和管理员 override 决定。当前 PID 1 仍然只记录 mount plan，不会自动 apply。
