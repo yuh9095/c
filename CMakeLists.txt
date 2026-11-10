@@ -52,6 +52,10 @@ target_link_libraries(ninit-manager-core PUBLIC ninit-common)
 target_include_directories(ninit-manager-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(ninit-manager-core PRIVATE -Wall -Wextra -Wpedantic)
 
+add_executable(ninit-init src/init/main.c)
+target_link_libraries(ninit-init PRIVATE ninit-init)
+target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
+
 add_executable(ninit-manager src/manager/main.c)
 target_link_libraries(ninit-manager PRIVATE ninit-common ninit-manager-core)
 target_compile_options(ninit-manager PRIVATE -Wall -Wextra -Wpedantic)
@@ -60,7 +64,7 @@ add_executable(ninitctl src/ctl/main.c)
 target_link_libraries(ninitctl PRIVATE ninit-common)
 target_compile_options(ninitctl PRIVATE -Wall -Wextra -Wpedantic)
 
-install(TARGETS ninit-manager ninitctl
+install(TARGETS ninit-init ninit-manager ninitctl
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 install(DIRECTORY include/ninit
