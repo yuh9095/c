@@ -187,16 +187,15 @@ conservative startup policy. The first implementation follows the layered
 approach used by systemd's `detect_container()` and OpenRC's
 `detect_container()`/`rc_sys` model:
 
-- `/run/systemd/container` and the inherited `container` environment value;
-- Podman and Docker marker files;
-- OpenVZ procfs indicators;
-- systemd-style evidence ordering: OpenVZ procfs indicators, WSL kernel
-  release, Proot's `TracerPid`/tracer command name, the
-  `/run/host/container-manager` identification file, the PID 1
-  `container` environment variable, and runtime marker files. A `container`
-  environment value supplied for a non-PID-1 process is deliberately ignored;
-  cgroup path names are not used as container identity because they are not a
-  reliable systemd detection signal;
+- `/run/systemd/container` is the highest-priority explicit runtime marker;
+- the inherited `container` environment variable is accepted only when Ninit is PID 1;
+- Proot is detected through `TracerPid` and the tracer process command name;
+- `/run/host/container-manager` identifies a container manager when present;
+- `/run/.containerenv` and `/.dockerenv` identify Podman and Docker;
+- WSL kernel/interop markers identify a VM guest, not a container;
+- OpenVZ uses `/proc/vz` together with the absence of host-only `/proc/bc`;
+- cgroup path names are deliberately not used to infer a container family:
+  they are not a reliable systemd container identity signal;
 - WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
   verifies that the opened handle is a PID namespace; only then is namespace
   evidence recorded. A visible parent proves the current PID namespace is
