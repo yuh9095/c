@@ -14,6 +14,10 @@ struct service_process {
     int exec_fd;
     uint64_t job_id;
     size_t plan_index;
+    const struct ninit_unit *unit;
+    uint64_t stop_job_id;
+    size_t stop_plan_index;
+    int stop_requested;
     int exec_confirmed;
     int child_exited;
     int wait_status;
@@ -34,6 +38,20 @@ find_process(struct ninit_service_runtime *runtime, pid_t pid)
         if (runtime->processes[i].pid == pid)
             return &runtime->processes[i];
     return NULL;
+}
+
+static int
+complete_stop_if_ready(struct ninit_service_runtime *runtime,
+                      struct service_process *process)
+{
+    if (!process->stop_requested || !process->child_exited ||
+        !process->exec_confirmed)
+        return 0;
+    if (ninit_job_manager_complete(runtime->jobs, process->stop_job_id,
+                                   process->stop_plan_index, 1, 0) < 0)
+        return -1;
+    process->stop_requested = 0;
+    return 1;
 }
 
 static void
@@ -136,10 +154,61 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
         errno = EINVAL;
         return -1;
     }
+    int is_stop;
+
     result = ninit_job_manager_dispatch(runtime->jobs, job_id,
                                         &unit, &plan_index);
     if (result <= 0)
         return result;
+    is_stop = ninit_job_manager_is_stop(runtime->jobs, job_id);
+    if (is_stop < 0) {
+        int saved_errno = errno;
+        (void) ninit_job_manager_complete(runtime->jobs, job_id,
+                                          plan_index, 0, saved_errno);
+        errno = saved_errno;
+        return -1;
+    }
+
+    if (is_stop) {
+        size_t i;
+        struct service_process *process = NULL;
+        if (unit->type == NINIT_UNIT_SERVICE) {
+            for (i = 0; i < runtime->count; ++i) {
+                if (runtime->processes[i].unit == unit) {
+                    process = &runtime->processes[i];
+                    break;
+                }
+            }
+        }
+        if (process == NULL) {
+            if (ninit_job_manager_complete(runtime->jobs, job_id,
+                                           plan_index, 1, 0) < 0)
+                return -1;
+        } else {
+            if (process->stop_requested) {
+                (void) ninit_job_manager_complete(runtime->jobs, job_id,
+                                                  plan_index, 0, EBUSY);
+                errno = EBUSY;
+                return -1;
+            }
+            process->stop_requested = 1;
+            process->stop_job_id = job_id;
+            process->stop_plan_index = plan_index;
+            if (kill(process->pid, SIGTERM) < 0 && errno != ESRCH) {
+                int saved_errno = errno;
+                process->stop_requested = 0;
+                (void) ninit_job_manager_complete(runtime->jobs, job_id,
+                                                  plan_index, 0, saved_errno);
+                errno = saved_errno;
+                return -1;
+            }
+            if (complete_stop_if_ready(runtime, process) < 0)
+                return -1;
+        }
+        if (started_pid != NULL)
+            *started_pid = -1;
+        return 1;
+    }
 
     if (unit->type == NINIT_UNIT_TARGET) {
         if (ninit_job_manager_complete(runtime->jobs, job_id,
@@ -178,6 +247,10 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
         runtime->processes[runtime->count].exec_fd = exec_fd;
         runtime->processes[runtime->count].job_id = job_id;
         runtime->processes[runtime->count].plan_index = plan_index;
+        runtime->processes[runtime->count].unit = unit;
+        runtime->processes[runtime->count].stop_job_id = 0;
+        runtime->processes[runtime->count].stop_plan_index = 0;
+        runtime->processes[runtime->count].stop_requested = 0;
         runtime->processes[runtime->count].exec_confirmed = 0;
         runtime->processes[runtime->count].child_exited = 0;
         runtime->processes[runtime->count].wait_status = 0;
@@ -280,8 +353,11 @@ ninit_service_runtime_check_exec(
                                    result > 0, saved_errno) < 0)
         return -1;
 
-    if (process->child_exited)
+    if (process->child_exited) {
+        if (complete_stop_if_ready(runtime, process) < 0)
+            return -1;
         remove_process(runtime, process);
+    }
     if (result < 0) {
         errno = saved_errno;
         return -1;
@@ -309,8 +385,11 @@ ninit_service_runtime_child_exited(
     }
     process->child_exited = 1;
     process->wait_status = wait_status;
-    if (process->exec_confirmed)
+    if (process->exec_confirmed) {
+        if (complete_stop_if_ready(runtime, process) < 0)
+            return -1;
         remove_process(runtime, process);
+    }
     return 0;
 }
 
