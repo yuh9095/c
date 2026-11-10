@@ -141,7 +141,7 @@ parse_exec_start(const char *value, struct string_list *list)
             continue;
         }
         if (ch == '\\' && quote != '\'') {
-            if (i == length) {
+            if (i + 1 >= length) {
                 free(word);
                 errno = EINVAL;
                 return -1;
