@@ -186,6 +186,17 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     environment->container = NINIT_CONTAINER_NONE;
     environment->is_pid1 = options != NULL && options->is_pid1;
 
+    /* Administrator policy, like OpenRC rc_sys, overrides auto detection. */
+    proc_status = apply_environment_override(
+        options != NULL ? options->environment_override : NULL,
+        environment);
+    if (proc_status < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (proc_status > 0)
+        return 0;
+
     /* systemd's explicit runtime marker has higher precedence than heuristics. */
     if (read_first_line(root, "/run/systemd/container",
                         value, sizeof(value)) == 0 && value[0] != '\0') {
