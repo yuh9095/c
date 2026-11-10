@@ -390,6 +390,140 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     return 0;
 }
 
+
+static void
+decode_mount_field(char *field)
+{
+    char *src = field;
+    char *dst = field;
+
+    while (*src != '\0') {
+        if (src[0] == '\\' && src[1] >= '0' && src[1] <= '7' &&
+            src[2] >= '0' && src[2] <= '7' &&
+            src[3] >= '0' && src[3] <= '7') {
+            *dst++ = (char) ((src[1] - '0') * 64 +
+                             (src[2] - '0') * 8 + (src[3] - '0'));
+            src += 4;
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
+static int
+read_effective_capabilities(const char *root, int *cap_admin, int *cap_boot)
+{
+    char full[4096];
+    char *line = NULL;
+    size_t capacity = 0;
+    FILE *file;
+    int found = 0;
+
+    if (make_path(full, sizeof(full), root, "/proc/self/status") < 0)
+        return -1;
+    file = fopen(full, "r");
+    if (file == NULL)
+        return -1;
+
+    while (getline(&line, &capacity, file) >= 0) {
+        unsigned long long effective;
+        if (strncmp(line, "CapEff:", 7) != 0)
+            continue;
+        if (sscanf(line + 7, "%llx", &effective) != 1) {
+            errno = EINVAL;
+            free(line);
+            fclose(file);
+            return -1;
+        }
+        *cap_admin = (effective & (1ULL << 21)) != 0;
+        *cap_boot = (effective & (1ULL << 22)) != 0;
+        found = 1;
+        break;
+    }
+    free(line);
+    fclose(file);
+    if (!found) {
+        errno = ENODATA;
+        return -1;
+    }
+    return 0;
+}
+
+int
+ninit_environment_probe_capabilities(
+    const char *root,
+    struct ninit_environment_capabilities *capabilities)
+{
+    char full[4096];
+    char *line = NULL;
+    size_t capacity = 0;
+    FILE *file;
+
+    if (capabilities == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(capabilities, 0, sizeof(*capabilities));
+
+    if (make_path(full, sizeof(full), root, "/proc/self/mountinfo") == 0) {
+        file = fopen(full, "r");
+        if (file != NULL) {
+            capabilities->mountinfo_available = 1;
+            while (getline(&line, &capacity, file) >= 0) {
+                char *save = NULL;
+                char *token;
+                char *mountpoint = NULL;
+                char *separator = NULL;
+                char *filesystem = NULL;
+                unsigned int field = 0;
+
+                token = strtok_r(line, " ", &save);
+                while (token != NULL) {
+                    field++;
+                    if (field == 5)
+                        mountpoint = token;
+                    if (strcmp(token, "-") == 0) {
+                        separator = token;
+                        filesystem = strtok_r(NULL, " ", &save);
+                        break;
+                    }
+                    token = strtok_r(NULL, " ", &save);
+                }
+                if (mountpoint == NULL || separator == NULL ||
+                    filesystem == NULL)
+                    continue;
+                mountpoint[strcspn(mountpoint, "\r\n")] = '\0';
+                filesystem[strcspn(filesystem, "\r\n")] = '\0';
+                decode_mount_field(mountpoint);
+
+                if (strcmp(mountpoint, "/proc") == 0 &&
+                    strcmp(filesystem, "proc") == 0)
+                    capabilities->proc_mounted = 1;
+                else if (strcmp(mountpoint, "/sys") == 0 &&
+                         strcmp(filesystem, "sysfs") == 0)
+                    capabilities->sys_mounted = 1;
+                else if (strcmp(mountpoint, "/dev") == 0 &&
+                         strcmp(filesystem, "devtmpfs") == 0)
+                    capabilities->devtmpfs_mounted = 1;
+
+                if (strcmp(filesystem, "cgroup") == 0 ||
+                    strcmp(filesystem, "cgroup2") == 0)
+                    capabilities->cgroup_mounted = 1;
+            }
+            free(line);
+            line = NULL;
+            capacity = 0;
+            fclose(file);
+        }
+    }
+
+    if (read_effective_capabilities(root, &capabilities->cap_sys_admin,
+                                    &capabilities->cap_sys_boot) == 0)
+        capabilities->status_available = 1;
+    return 0;
+}
+
 void
 ninit_environment_get_policy(const struct ninit_environment *environment,
                              struct ninit_environment_policy *policy)
