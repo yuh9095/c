@@ -47,6 +47,25 @@ int main(void)
     assert(ninit_job_manager_get_info(jobs, id, &info) == 0);
     assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 3);
 
+    /* Stop order is the exact reverse of the dependency start plan. */
+    assert(ninit_job_manager_submit_stop(jobs, plan, 2, &id) == 0);
+    assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 1);
+    assert(strcmp(unit->name, "root.target") == 0);
+    assert(ninit_job_manager_complete(jobs, id, index, 1, 0) == 0);
+    assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 1);
+    assert(strcmp(unit->name, "b.target") == 0);
+    {
+        const struct ninit_unit *last;
+        size_t last_index;
+        assert(ninit_job_manager_dispatch(jobs, id, &last, &last_index) == 1);
+        assert(strcmp(last->name, "a.target") == 0);
+        assert(ninit_job_manager_complete(jobs, id, index, 1, 0) == 0);
+        assert(ninit_job_manager_complete(jobs, id, last_index, 1, 0) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &last, &last_index) == 0);
+    }
+    assert(ninit_job_manager_get_info(jobs, id, &info) == 0);
+    assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 3);
+
     ninit_dependency_plan_destroy(plan);
     ninit_job_manager_destroy(jobs);
     ninit_unit_manager_destroy(units);
