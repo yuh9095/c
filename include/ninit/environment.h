@@ -100,6 +100,7 @@ struct ninit_environment_capabilities {
     int cgroup_mounted;
     int root_mount_found;
     int root_mount_shared;
+    int root_mount_read_only;
     int mount_namespace_available;
     int mount_namespace_matches_pid1;
     uint64_t mount_namespace_inode;
