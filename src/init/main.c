@@ -78,11 +78,6 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
         return;
     }
 
-    if (ninit_pid1_setup_console(console_path) < 0) {
-        perror("ninit-init: setup console");
-        return 1;
-    }
-
     if (get_monotonic_time(&now) < 0) {
         now.tv_sec = 0;
         now.tv_nsec = 0;
@@ -135,6 +130,11 @@ main(int argc, char **argv)
 
     if (!ninit_pid1_is_init()) {
         fprintf(stderr, "ninit-init: refusing to run outside PID 1\n");
+        return 1;
+    }
+
+    if (ninit_pid1_setup_console(console_path) < 0) {
+        perror("ninit-init: setup console");
         return 1;
     }
 
