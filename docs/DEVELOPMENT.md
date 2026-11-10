@@ -77,8 +77,8 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 当前 Unit Manager 提供内存中的原生 Unit 注册表；独立的 Unit File Loader 可从单个 .service/.target 文件解析定义并注册到该表中。
 
 - 支持 `service` 与 `target` 两种 Unit 类型。
-- 每个 Unit 有唯一名称和可选 description；service 必须提供 ExecStart argv，target 不允许 ExecStart。
-- ExecStart 按 argv 数组保存并交给后续执行器直接 exec，不经过 shell 字符串解析。
+- 每个 Unit 有唯一名称和可选 description；service 必须提供 ExecStart argv，可选提供 ExecStop argv；target 不允许 ExecStart/ExecStop。
+- ExecStart 与可选 ExecStop 均按 argv 数组深拷贝保存，不经过 shell 字符串解析；ExecStop 仅完成模型和文件解析，异步执行/等待仍由 Service Runtime 后续接入。
 - Unit 可声明 Requires、Wants、After、Before 名称列表。
 - 注册时深拷贝定义及依赖名称；调用者可在 add 返回后释放输入缓冲区。
 - 重复名称返回 `EEXIST`，非法名称/定义返回 `EINVAL`。
@@ -86,7 +86,7 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 
 名称目前限制为最多 255 个 ASCII 字母数字字符以及 `_`、`-`、`.`、`@`、`:`。依赖名称在注册时只做语法检查；是否存在、是否形成循环以及实际启动顺序由后续 Dependency Engine 负责。
 
-Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before，以及 [Service] 的 ExecStart；ExecStart 使用轻量引号/反斜杠分词，不调用 shell、不做变量展开。支持单个文件加载，也支持目录加载；目录中的 .service/.target 文件按文件名排序后注册，遇到错误会停止，但已注册的前序文件不会回滚。尚未实现 drop-in、环境变量、ExecStartPre/Post 或 systemd/OpenRC 兼容。Unit 状态、完整服务管理仍由后续模块负责。
+Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before，以及 [Service] 的 ExecStart/ExecStop；两者使用同一套轻量引号/反斜杠分词，不调用 shell、不做变量展开。支持单个文件加载，也支持目录加载；目录中的 .service/.target 文件按文件名排序后注册，遇到错误会停止，但已注册的前序文件不会回滚。尚未实现 drop-in、环境变量、ExecStartPre/Post 或 systemd/OpenRC 兼容。Unit 状态、完整服务管理仍由后续模块负责。
 
 
 ## Dependency Engine（第一版）
