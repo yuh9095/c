@@ -4,7 +4,7 @@
 
 当前仓库是 Ninit 的工程起点，不是可用于启动真实系统的 init 实现。
 
-目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前只处理 PING/PONG 并在私有通道关闭后退出；PID1 侧已有独立的 Manager 监督状态机，支持崩溃后的有界指数退避重启。Unit、Job、服务生命周期、PID 1 主循环和完整故障恢复尚未实现。新增的 Boot Coordinator 目前只负责按顺序提交 sysinit、boot、default 三个目标，并接收目标完成/失败结果；它尚未连接真实 Job Manager。不要将当前程序配置为系统 PID 1。
+目前提供 CMake/C11 构建、公共日志 API、PID1—Manager IPC 消息帧、Unix SOCK_SEQPACKET 通道、Manager 子进程启动与握手，以及 glibc/musl CI。Manager 目前处理 PING/PONG、监听自己的 SIGCHLD self-pipe，并统一回收自己创建的子进程；PID1 侧已有独立的 Manager 监督状态机，支持崩溃后的有界指数退避重启。Unit、Job、服务生命周期、PID 1 主循环和完整故障恢复尚未实现。新增的 Boot Coordinator 目前只负责按顺序提交 sysinit、boot、default 三个目标，并接收目标完成/失败结果；它尚未连接真实 Job Manager。不要将当前程序配置为系统 PID 1。
 
 ## PID1—Manager 启动流程
 
@@ -30,7 +30,7 @@ ninit_manager_start() 位于 include/ninit/manager_process.h，由未来 PID 1 �
 
 当前实现提供一次 poll-based 事件循环迭代：等待信号管道、在普通上下文分发信号，并在每次唤醒后统一回收子进程。它尚未接入 Manager IPC、监督器定时器或 Boot/Shutdown Coordinator，因此不是完整 PID 1 主循环。事件源每个进程只允许一个实例；初始化/销毁由单线程 PID 1 控制。回调不得假定每个标准信号都一一对应：标准信号可能合并，self-pipe 满时处理函数的非阻塞写入也可能失败，因此 SIGCHLD 仅是唤醒提示，统一回收函数才是事实来源。
 
-Manager process API 不再暴露单独的 child reap 接口，避免 Manager 生命周期模块与 PID 1 的全局回收路径竞争。Manager 的退出状态必须由 PID 1 回收后按 PID 路由到 Manager Supervisor。
+PID 1 只回收自己的直接子进程（例如 ninit-manager）；Manager 对自己创建的服务子进程使用独立的 SIGCHLD self-pipe 和 waitpid(-1, WNOHANG) 路径。两个进程各自只回收自己的子进程，不存在跨进程 waitpid 竞争。Manager 的退出状态仍由 PID 1 回收后按 PID 路由到 Manager Supervisor。
 
 ## IPC 协议与传输层
 
@@ -51,7 +51,7 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 ## 设计约束
 
 - PID 1 优先保证信号处理、子进程回收最终保障和紧急输出。
-- PID 1 统一使用一个 waitpid(-1, WNOHANG) 路径回收所有子进程；Manager 和其他模块不得自行 waitpid 竞争回收。
+- PID 1 统一使用一个 waitpid(-1, WNOHANG) 路径回收自己的直接子进程；Manager 也统一使用自己的 waitpid(-1, WNOHANG) 路径回收其直接子进程。模块不得在同一进程内另建竞争回收路径。
 - PID 1 信号处理函数只向 NONBLOCK self-pipe 写入信号编号；事件循环在普通上下文中分发信号并执行回收/关机协调。
 - self-pipe 即使因信号突发而满，事件循环每次醒来仍必须调用统一子进程回收函数，避免丢失 SIGCHLD 通知造成僵尸进程。
 - Manager 内模块通过清晰 API 协作，不要求每个模块独立成进程。
@@ -122,11 +122,11 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 
 - 只接受 Service Unit，并直接使用 argv 数组调用 `execvp()`；不经过 shell。
 - 使用 CLOEXEC 错误管道区分 fork 成功与 exec 成功：exec 成功时 close-on-exec 使父进程读到 EOF；失败时子进程写回 errno 并以 127 退出。
-- 父进程通过非阻塞读端调用 `ninit_service_executor_check_exec()`，可在 PID 1 事件循环中等待握手完成。
-- 执行器不调用 wait/waitpid。子进程退出状态必须由 PID 1 的统一 `ninit_pid1_reap_children()` 回收并按 PID 路由。
+- 父进程通过非阻塞读端调用 `ninit_service_executor_check_exec()`，由 Manager 事件循环等待握手完成。
+- 执行器不调用 wait/waitpid。子进程退出状态由 Manager 的统一 child reaper 回收，再按 PID 路由到 Service Runtime。
 - Target 不创建进程，应由 Job 调度层直接完成。
 
-当前版本尚未把 PID、exec 握手 fd 和 Job ID 集成进 Manager 主循环，也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
+当前 Manager 主循环已接入 SIGCHLD self-pipe 和 Service Runtime 的 child-exit 回调，但尚未把 Unit 加载、Job 提交和 exec 握手 fd 轮询接入主循环；也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
 
 
 ## Service Runtime（第一版）
@@ -139,4 +139,4 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前尚未实现服务停止、进程组、超时、重启策略和 manager 主事件循环的实际接线。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前尚未实现服务停止、进程组、超时、重启策略、Unit 配置加载、Job 提交和 exec 握手 fd 的主循环接线。
