@@ -282,7 +282,7 @@ it to produce a read-only early mount plan.
 - 目标缺失时，必须同时满足环境策略允许、mountinfo 可读、CapEff 可读且当前有效集包含 `CAP_SYS_ADMIN`，才会标记为 `mount`；否则标记为 `blocked`。
 - mountpoint 目录必须已经存在。该模块不会自动创建目录、卸载挂载或替换 runtime 提供的挂载。
 - `ninit_mount_manager_apply()` 只执行 plan 中的 mount 项；每次 mount 前重新读取 mountinfo 和有效 capability，拒绝过期计划，并校验目标、文件系统、source、flags 和 mount options 均属于内置白名单。
-- 测试可注入 mount callback；生产调用传 NULL 时使用 Linux `mount(2)`。实际 syscall errno 是最终结果，能力位只是必要条件，不是成功保证。
+- 测试可注入 mount callback；生产调用传 NULL 时使用 `fsopen()`、`fsconfig()`、`fsmount()`、`mount_setattr()` 和 `move_mount()`：文件系统先创建为 detached mount，再通过已验证的目标目录 FD 安装，不再将目标路径字符串交给 `mount(2)` 重新解析。`/dev` 的固定 `mode=0755` 通过 `fsconfig()` 设置，VFS `nosuid`、`nodev`、`noexec` 属性通过 `mount_setattr()` 设置。若构建时缺少所需 syscall 编号，或运行内核不支持这些接口，apply 会失败（通常为 `EOPNOTSUPP`/内核返回的 errno），不会回退到路径字符串挂载。实际 syscall errno 是最终结果，能力位只是必要条件，不是成功保证。
 
 对已经存在且 filesystem 类型正确的挂载，plan 还会报告 mountinfo 第六字段中的有效 VFS 安全选项：`nosuid`、`nodev`、`noexec`。这些值通过 `existing_mount_options` 位标志提供给调用者。`/proc` 和 `/sys` 推荐同时具备三项，`/dev` 至少推荐 `nosuid`；由于运行时可能有意提供不同选项，Ninit 只报告差异，不自动 remount，也不把已有挂载替换掉。新建挂载仍通过固定的 mount flags 设置这些约束。
 
@@ -296,7 +296,7 @@ PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动
 这个比较只证明当前进程与 PID 1 处于同一 mount namespace，**不证明该 namespace 是宿主机初始 namespace**。Linux 没有一个可在所有容器/权限模型下可靠使用的通用“宿主机 mount namespace”标识；因此 Ninit 不会仅凭 inode 常量、namespace 名称或容器类型宣称自己处于 host namespace。环境分类仍由独立的 PID namespace、运行时标记和管理员 override 决定。当前 PID 1 仍然只记录 mount plan，不会自动 apply。
 
 
-Mount Manager 的路径构造器要求 root 和目标均为绝对路径，并拒绝 `.`、`..` 路径组件；root 末尾的多余斜杠会被规范化。对缺失的 `/proc`、`/sys`、`/dev` 目标，随后从 `/` 开始逐级使用 `openat(O_PATH|O_NOFOLLOW)` followed by `fstat()` 相对于已打开的父目录解析 root 路径及其全部父级组件：每一级都必须是实际目录，符号链接和非目录组件会标记为 conflict。显式 apply 会在每次 mount 前重新执行同一检查。该检查可拒绝最终目标、父目录或 root 路径中的符号链接，但它仍是路径检查，不能完全消除检查与 `mount(2)` 之间的 TOCTOU 竞态；因此这不是完整的抗竞态路径解析方案。后续若要把 mount apply 用于高对抗环境，应改为基于目录 fd 的受约束路径解析，并使用可将挂载绑定到已打开 mountpoint 的内核接口；在此之前 PID 1 不自动调用 apply。
+Mount Manager 的路径构造器要求 root 和目标均为绝对路径，并拒绝 `.`、`..` 路径组件；root 末尾的多余斜杠会被规范化。路径解析从 `/` 开始逐级使用 `openat(O_PATH|O_NOFOLLOW)` followed by `fstat()`，每一级都相对于已打开的父目录解析并必须是实际目录。规划阶段会将符号链接和非目录组件标记为 conflict；apply 阶段则直接失败并保留 `ELOOP`/`ENOTDIR`。生产挂载会保留最终目标目录 FD，并通过 `move_mount(..., MOVE_MOUNT_F_EMPTY_PATH)` 安装 detached mount，避免在检查后重新解析目标路径字符串。
 
 能力快照还从根挂载记录的 mount options 字段读取 `ro`/`rw`，报告 `root_mount_read_only`。该字段目前仅用于准确描述根挂载状态，不会因为 root 为只读就一概阻止挂载：Linux 可以在只读根文件系统中挂载到预先存在的目录，最终仍由 namespace、权限和 mount syscall 决定是否成功。
 
