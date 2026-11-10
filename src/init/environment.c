@@ -3,9 +3,12 @@
 #include <ninit/environment.h>
 
 #include <errno.h>
+#include <fcntl.h>
+#include <linux/nsfs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -368,21 +371,37 @@ ninit_environment_detect(const struct ninit_environment_options *options,
      * still be recognized from /proc/1/ns/pid when Ninit is PID 1.
      */
     if (environment->is_pid1 && environment->proc_available) {
-        struct stat pid_namespace;
         char namespace_path[4096];
+        int namespace_fd;
+        int parent_fd;
 
         if (make_path(namespace_path, sizeof(namespace_path), root,
-                      "/proc/1/ns/pid") < 0 ||
-            stat(namespace_path, &pid_namespace) < 0) {
-            /* PID 1 without namespace visibility is not safe to call a host. */
+                      "/proc/self/ns/pid") < 0)
+            return 0;
+        namespace_fd = open(namespace_path, O_RDONLY | O_CLOEXEC);
+        if (namespace_fd < 0) {
+            /* Without a readable namespace handle, do not infer HOST. */
             return 0;
         }
+
         environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE;
-        if ((unsigned long long) pid_namespace.st_ino != 0xEFFFFFFCULL) {
+        parent_fd = ioctl(namespace_fd, NS_GET_PARENT);
+        close(namespace_fd);
+        if (parent_fd >= 0) {
+            close(parent_fd);
             environment->kind = NINIT_ENVIRONMENT_CONTAINER;
             environment->container = NINIT_CONTAINER_OTHER;
             return 0;
         }
+
+        /*
+         * EPERM is deliberately inconclusive: it is returned both when the
+         * initial PID namespace has no visible parent and when its parent is
+         * outside the caller's namespace scope. ENOTTY also means the kernel
+         * cannot provide this evidence. In either case remain UNKNOWN rather
+         * than relying on a kernel-internal inode number.
+         */
+        return 0;
     }
 
     if (environment->proc_available)
