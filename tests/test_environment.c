@@ -239,8 +239,9 @@ main(void)
     assert(environment.container == NINIT_CONTAINER_LXC);
     assert((environment.evidence & NINIT_ENV_EVIDENCE_ENVIRONMENT) != 0);
 
-    /* WSL is a Linux guest environment, not a container. */
+    /* WSL takes precedence over generic image marker files. */
     options.container_environment = NULL;
+    snprintf(path, sizeof(path), "%s/.dockerenv", root); make_file(path, "");
     snprintf(path, sizeof(path), "%s/proc/sys", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root);
@@ -249,6 +250,7 @@ main(void)
     assert(environment.kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE);
     assert(environment.virtual_machine == NINIT_VM_WSL);
     assert(environment.container == NINIT_CONTAINER_NONE);
+    snprintf(path, sizeof(path), "%s/.dockerenv", root); unlink(path);
     ninit_environment_get_policy(&environment, &policy);
     assert(policy.allow_host_shutdown == 0);
     assert(policy.allow_host_cgroup_management == 0);
