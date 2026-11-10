@@ -20,7 +20,7 @@ main(void)
     struct ninit_dependency_plan *plan = NULL;
     struct ninit_job_info info;
     struct ninit_unit_spec spec;
-    const char *argv[] = { "/bin/true", NULL };
+    const char *argv[] = { "/bin/sleep", "30", NULL };
     uint64_t job_id;
     pid_t pid;
     int result;
@@ -34,7 +34,7 @@ main(void)
     spec.name = "smoke.service";
     spec.type = NINIT_UNIT_SERVICE;
     spec.exec_start_argv = argv;
-    spec.exec_start_argc = 1;
+    spec.exec_start_argc = 2;
     assert(ninit_unit_manager_add(units, &spec) == 0);
     assert(ninit_unit_manager_find(units, "smoke.service")->exec_start_argv[1] == NULL);
     assert(ninit_dependency_plan_build(units, "smoke.service", &plan) == 0);
@@ -67,8 +67,9 @@ main(void)
     assert(info.state == NINIT_JOB_SUCCEEDED);
     assert(info.completed_count == 1);
 
+    assert(ninit_service_runtime_signal_all(runtime, SIGKILL) == 0);
     assert(waitpid(pid, &status, 0) == pid);
-    assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
     assert(ninit_service_runtime_tracked_count(runtime) == 0);
 
