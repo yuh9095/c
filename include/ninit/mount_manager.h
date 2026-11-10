@@ -74,6 +74,12 @@ int ninit_mount_manager_plan(
  * callback replaces the production syscall sequence, primarily for tests.
  * Existing mounts are never replaced.
  */
+struct ninit_mount_result {
+    enum ninit_mount_target target;
+    enum ninit_mount_action action;
+    int error_number;
+};
+
 typedef int (*ninit_mount_callback)(
     const char *source, const char *target, const char *filesystem,
     unsigned long flags, const char *data, void *userdata);
@@ -83,6 +89,15 @@ int ninit_mount_manager_apply(const char *root,
                               const struct ninit_mount_plan *plan,
                               ninit_mount_callback callback,
                               void *userdata);
+/*
+ * Apply each requested target independently. Results are written in plan
+ * order; a failure for one target does not suppress attempts for later ones.
+ * Returns the number of failed targets, or -1 for an invalid report request.
+ */
+int ninit_mount_manager_apply_report(
+    const char *root, const struct ninit_environment_policy *policy,
+    const struct ninit_mount_plan *plan, ninit_mount_callback callback,
+    void *userdata, struct ninit_mount_result *results, size_t result_count);
 
 enum ninit_mount_error_class ninit_mount_manager_classify_error(int error_number);
 const char *ninit_mount_error_class_name(enum ninit_mount_error_class error_class);
