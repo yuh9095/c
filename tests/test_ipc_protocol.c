@@ -1,0 +1,7 @@
+#include <ninit/ipc_protocol.h>
+#include <assert.h>
+#include <string.h>
+static void round_trip(void){const unsigned char body[]={0,0x7f,0x80,0xff};unsigned char b[28];struct ninit_ipc_header a={1,NINIT_IPC_MSG_SUBMIT_JOB,0,4,UINT64_C(0x0102030405060708)},z;const unsigned char*p=NULL;size_t n=0;assert(ninit_ipc_encode(&a,body,b,sizeof(b),&n)==0);assert(n==sizeof(b));assert(ninit_ipc_decode(b,n,&z,&p)==0);assert(z.type==a.type&&z.request_id==a.request_id&&z.payload_size==4);assert(p&&memcmp(p,body,4)==0);}
+static void empty_packet(void){unsigned char b[24];struct ninit_ipc_header a={1,NINIT_IPC_MSG_PING,0,0,42},z;const unsigned char*p=(const unsigned char*)1;size_t n=0;assert(ninit_ipc_encode(&a,NULL,b,sizeof(b),&n)==0);assert(ninit_ipc_decode(b,n,&z,&p)==0&&p==NULL&&z.request_id==42);}
+static void rejects(void){unsigned char b[24];struct ninit_ipc_header a={1,NINIT_IPC_MSG_PING,0,0,1},z;const unsigned char*p=NULL;size_t n=0;assert(ninit_ipc_encode(&a,NULL,b,sizeof(b),&n)==0);assert(ninit_ipc_decode(b,n-1,&z,&p)==NINIT_IPC_INVALID_PACKET);b[0]^=0xff;assert(ninit_ipc_decode(b,n,&z,&p)==NINIT_IPC_INVALID_PACKET);b[0]^=0xff;b[11]=1;assert(ninit_ipc_decode(b,n,&z,&p)==NINIT_IPC_INVALID_PACKET);assert(ninit_ipc_encode(&a,NULL,b,23,&n)==NINIT_IPC_BUFFER_TOO_SMALL);a.type=999;assert(ninit_ipc_encode(&a,NULL,b,sizeof(b),&n)==NINIT_IPC_UNSUPPORTED);}
+int main(void){round_trip();empty_packet();rejects();return 0;}
