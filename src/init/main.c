@@ -213,6 +213,18 @@ main(int argc, char **argv)
     memset(&environment_capabilities, 0, sizeof(environment_capabilities));
     if (ninit_environment_probe_capabilities(
             "/", &environment_capabilities) == 0) {
+        if (ninit_environment_authorize_host_shutdown(
+                &environment_policy, &environment_capabilities) == 0) {
+            fprintf(stderr,
+                    "ninit-init: host shutdown policy gate: authorized "
+                    "(a reboot/poweroff request is still not issued here)\n");
+        } else {
+            int shutdown_error = errno;
+            fprintf(stderr,
+                    "ninit-init: host shutdown policy gate: denied "
+                    "errno=%d (%s)\n",
+                    shutdown_error, strerror(shutdown_error));
+        }
         fprintf(stderr, "ninit-init: capability probe: mountinfo=%s status=%s "
                 "CAP_SYS_ADMIN=%s CAP_SYS_BOOT=%s mount-ns=%s "
                 "matches-pid1=%s inode=%llu root-mount=%s "
