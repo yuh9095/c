@@ -238,3 +238,10 @@ ninit_unit_manager_count(const struct ninit_unit_manager *manager)
 {
     return manager == NULL ? 0 : manager->count;
 }
+
+const struct ninit_unit *
+ninit_unit_manager_at(const struct ninit_unit_manager *manager, size_t index)
+{
+    if (manager == NULL || index >= manager->count) return NULL;
+    return manager->units[index];
+}
