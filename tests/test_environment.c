@@ -39,6 +39,7 @@ main(void)
     snprintf(path, sizeof(path), "%s/proc", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/1", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); make_dir(path);
+    snprintf(path, sizeof(path), "%s/proc/self/status", root); make_file(path, "Name:\\tninit\\n");
     snprintf(path, sizeof(path), "%s/run", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/run/systemd", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/etc", root); make_dir(path);
@@ -140,6 +141,7 @@ main(void)
     snprintf(path, sizeof(path), "%s/run/systemd", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/run", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/1", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/self/status", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel", root); rmdir(path);
