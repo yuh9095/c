@@ -127,3 +127,16 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - Target 不创建进程，应由 Job 调度层直接完成。
 
 当前版本尚未把 PID、exec 握手 fd 和 Job ID 集成进 Manager 主循环，也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
+
+
+## Service Runtime（第一版）
+
+`include/ninit/service_runtime.h` 将 Job Manager 与 Service Executor 连接起来：
+
+- 从 Start Job 领取一个 Unit；Target 立即完成，Service 则创建子进程并登记 PID、exec 错误管道、Job ID 和 plan index。
+- 事件循环可通过 PID 查询 exec 管道 fd，监听可读事件后调用 `ninit_service_runtime_check_exec()`。
+- exec 成功才将对应 Unit 的 Start Job 标记成功；exec 失败则把实际 errno 反馈给 Job Manager。
+- PID 1 的统一 child-exit callback 将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。运行时模块不会调用 wait/waitpid。
+- 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
+
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。当前尚未实现服务停止、进程组、超时、重启策略和 manager 主事件循环的实际接线。
