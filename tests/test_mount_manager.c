@@ -163,6 +163,13 @@ main(void)
         assert(rename(real_sys, path) == 0);
     }
 
+    /* Dot-dot components are rejected instead of being path-resolved. */
+    snprintf(root_alias, sizeof(root_alias), "%s/../%s", root,
+             strrchr(root, '/') + 1);
+    errno = 0;
+    assert(ninit_mount_manager_plan(root_alias, &policy, &caps, &plan) == -1);
+    assert(errno == EINVAL);
+
     /* A symlink in the supplied root path is rejected as a mount target. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path, "1 0 0:1 / / rw - ext4 /dev/root rw\n");
