@@ -111,6 +111,28 @@ find_mount(const char *root, const char *path, char *filesystem,
     return found;
 }
 
+/* Reject symlink mountpoints: mount(2) must not follow a target outside root. */
+static int
+check_mountpoint_directory(const char *root, const char *path)
+{
+    char full[4096];
+    struct stat st;
+
+    if (make_path(full, sizeof(full), root, path) < 0)
+        return -1;
+    if (lstat(full, &st) < 0)
+        return -1;
+    if (S_ISLNK(st.st_mode)) {
+        errno = ELOOP;
+        return 0;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        errno = ENOTDIR;
+        return 0;
+    }
+    return 1;
+}
+
 static int
 default_mount(const char *source, const char *target, const char *filesystem,
               unsigned long flags, const char *data, void *userdata)
@@ -155,6 +177,15 @@ ninit_mount_manager_plan(const char *root,
 
         *entry = templates[i];
         plan->count++;
+        {
+            int directory = check_mountpoint_directory(root, entry->path);
+            if (directory < 0)
+                return -1;
+            if (directory == 0) {
+                errno = ELOOP;
+                return -1;
+            }
+        }
         mounted = find_mount(root, entry->path, existing_fs,
                              sizeof(existing_fs));
         if (mounted < 0)
@@ -168,23 +199,21 @@ ninit_mount_manager_plan(const char *root,
         allowed = i == NINIT_MOUNT_PROC ? policy->allow_mount_proc :
                   i == NINIT_MOUNT_SYS ? policy->allow_mount_sys :
                                          policy->allow_mount_devtmpfs;
+        {
+            int directory = check_mountpoint_directory(root, entry->path);
+            if (directory < 0)
+                return -1;
+            if (directory == 0) {
+                entry->action = NINIT_MOUNT_CONFLICT;
+                continue;
+            }
+        }
         if (!allowed || !caps->status_available || !caps->cap_sys_admin ||
             !caps->mount_namespace_available ||
             !caps->mount_namespace_matches_pid1 ||
             !caps->root_mount_found || caps->root_mount_shared) {
             entry->action = NINIT_MOUNT_BLOCKED;
             continue;
-        }
-        if (make_path(full, sizeof(full), root, entry->path) < 0)
-            return -1;
-        {
-            struct stat st;
-            if (stat(full, &st) < 0)
-                return -1;
-            if (!S_ISDIR(st.st_mode)) {
-                entry->action = NINIT_MOUNT_CONFLICT;
-                continue;
-            }
         }
         entry->action = NINIT_MOUNT_APPLY;
     }
