@@ -28,16 +28,16 @@ target_include_directories(ninit-common
 )
 target_compile_options(ninit-common PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(ninit-init STATIC
+add_library(ninit-init-core STATIC
     src/init/manager_process.c
     src/init/manager_supervisor.c
     src/init/pid1_runtime.c
     src/init/pid1_events.c
     src/init/boot_coordinator.c
 )
-target_link_libraries(ninit-init PUBLIC ninit-common)
-target_include_directories(ninit-init PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(ninit-init-core PUBLIC ninit-common)
+target_include_directories(ninit-init-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_options(ninit-init-core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_library(ninit-manager-core STATIC
     src/manager/unit_manager.c
@@ -53,7 +53,7 @@ target_include_directories(ninit-manager-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 target_compile_options(ninit-manager-core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(ninit-init src/init/main.c)
-target_link_libraries(ninit-init PRIVATE ninit-init)
+target_link_libraries(ninit-init PRIVATE ninit-init-core)
 target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(ninit-manager src/manager/main.c)
@@ -88,27 +88,27 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     add_test(NAME ipc-channel COMMAND test-ipc-channel)
 
     add_executable(test-pid1-runtime tests/test_pid1_runtime.c)
-    target_link_libraries(test-pid1-runtime PRIVATE ninit-init)
+    target_link_libraries(test-pid1-runtime PRIVATE ninit-init-core)
     target_compile_options(test-pid1-runtime PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME pid1-runtime COMMAND test-pid1-runtime)
 
     add_executable(test-pid1-events tests/test_pid1_events.c)
-    target_link_libraries(test-pid1-events PRIVATE ninit-init)
+    target_link_libraries(test-pid1-events PRIVATE ninit-init-core)
     target_compile_options(test-pid1-events PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME pid1-events COMMAND test-pid1-events)
 
     add_executable(test-manager-spawn tests/test_manager_spawn.c)
-    target_link_libraries(test-manager-spawn PRIVATE ninit-init)
+    target_link_libraries(test-manager-spawn PRIVATE ninit-init-core)
     target_compile_options(test-manager-spawn PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME manager-spawn COMMAND test-manager-spawn $<TARGET_FILE:ninit-manager>)
 
     add_executable(test-manager-supervisor tests/test_manager_supervisor.c)
-    target_link_libraries(test-manager-supervisor PRIVATE ninit-init)
+    target_link_libraries(test-manager-supervisor PRIVATE ninit-init-core)
     target_compile_options(test-manager-supervisor PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME manager-supervisor COMMAND test-manager-supervisor $<TARGET_FILE:ninit-manager>)
 
     add_executable(test-boot-coordinator tests/test_boot_coordinator.c)
-    target_link_libraries(test-boot-coordinator PRIVATE ninit-init)
+    target_link_libraries(test-boot-coordinator PRIVATE ninit-init-core)
     target_compile_options(test-boot-coordinator PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME boot-coordinator COMMAND test-boot-coordinator)
 
