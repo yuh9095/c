@@ -22,8 +22,8 @@ int ninit_service_runtime_signal_all(
     struct ninit_service_runtime *runtime, int signal_number);
 
 /*
- * Dispatch one Unit from a Start or Stop Job. Stop Jobs send SIGTERM to a
- * tracked Service and complete only after its child-exit event is recorded.
+ * Dispatch one Unit from a Start or Stop Job. Stop Jobs run an optional ExecStop command asynchronously, then send
+ * SIGTERM to the tracked Service and complete after its child exits.
  * Returns 1 when a Unit was handled, 0 when no work is currently available,
  * or -1 on error. Targets are completed immediately. Services are spawned
  * and tracked until both their exec handshake and child-exit notification
@@ -33,7 +33,7 @@ int ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                                    uint64_t job_id,
                                    pid_t *started_pid);
 
-/* Number of Service processes whose exec handshake is still pending. */
+/* Number of pending ExecStart and ExecStop handshakes. */
 size_t ninit_service_runtime_exec_pending_count(
     const struct ninit_service_runtime *runtime);
 
