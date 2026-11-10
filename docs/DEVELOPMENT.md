@@ -292,3 +292,6 @@ PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动
 环境能力快照额外记录 `/proc/self/ns/mnt` 与 `/proc/1/ns/mnt` 的可见性、inode 和设备号比较结果。Mount Manager 的显式 apply 要求两者都可读取且指向同一个 namespace；若无法读取或与 PID 1 不一致，则拒绝执行。
 
 这个比较只证明当前进程与 PID 1 处于同一 mount namespace，**不证明该 namespace 是宿主机初始 namespace**。Linux 没有一个可在所有容器/权限模型下可靠使用的通用“宿主机 mount namespace”标识；因此 Ninit 不会仅凭 inode 常量、namespace 名称或容器类型宣称自己处于 host namespace。环境分类仍由独立的 PID namespace、运行时标记和管理员 override 决定。当前 PID 1 仍然只记录 mount plan，不会自动 apply。
+
+
+Mount Manager 还会从 mountinfo 检查根挂载点 `/` 的传播属性。若找不到根挂载记录，或根挂载带有 `shared:` propagation tag，则缺失的伪文件系统挂载目标会被标记为 `blocked`；apply 阶段也会重新检查。原因是直接在 shared mount tree 下创建挂载可能向 peer namespace 传播。Ninit 当前不会擅自把整个根挂载树改成 private，也不会在未审查传播语义前自动改变系统挂载拓扑。
