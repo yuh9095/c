@@ -22,7 +22,8 @@ int ninit_service_runtime_signal_all(
     struct ninit_service_runtime *runtime, int signal_number);
 
 /*
- * Dispatch one Unit from a Start Job.
+ * Dispatch one Unit from a Start or Stop Job. Stop Jobs send SIGTERM to a
+ * tracked Service and complete only after its child-exit event is recorded.
  * Returns 1 when a Unit was handled, 0 when no work is currently available,
  * or -1 on error. Targets are completed immediately. Services are spawned
  * and tracked until both their exec handshake and child-exit notification
