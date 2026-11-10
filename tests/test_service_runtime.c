@@ -9,7 +9,6 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 
 int
@@ -26,7 +25,6 @@ main(void)
     pid_t pid;
     int result;
     int status;
-    int attempts;
     struct pollfd exec_poll;
     pid_t pending_pid;
     int pending_fd;
