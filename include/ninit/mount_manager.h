@@ -54,8 +54,10 @@ int ninit_mount_manager_plan(
     struct ninit_mount_plan *plan);
 
 /*
- * Apply only entries marked APPLY. Before each mount, mountinfo and
- * CAP_SYS_ADMIN are rechecked to reject stale plans. With callback == NULL,
+ * Apply only entries marked APPLY and still permitted by the environment
+ * policy used by the caller. Before each mount, mountinfo and CAP_SYS_ADMIN
+ * are rechecked to reject stale plans. The caller must pass the policy
+ * derived from its current environment detection; a NULL policy is rejected. With callback == NULL,
  * production uses fsopen/fsconfig/fsmount/mount_setattr/move_mount and binds
  * the detached mount to an already-open target directory fd. Unsupported
  * kernels fail closed; there is no mount(2) pathname fallback. A non-NULL
@@ -67,6 +69,7 @@ typedef int (*ninit_mount_callback)(
     unsigned long flags, const char *data, void *userdata);
 
 int ninit_mount_manager_apply(const char *root,
+                              const struct ninit_environment_policy *policy,
                               const struct ninit_mount_plan *plan,
                               ninit_mount_callback callback,
                               void *userdata);
