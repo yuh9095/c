@@ -68,11 +68,18 @@ main(void)
     assert(info.state == NINIT_JOB_SUCCEEDED);
     assert(info.completed_count == 1);
 
-    assert(ninit_service_runtime_signal_all(runtime, SIGKILL) == 0);
+    /* Stop jobs signal the tracked process and finish only after reaping. */
+    assert(ninit_job_manager_submit_stop(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_job_manager_is_stop(jobs, job_id) == 1);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_RUNNING && info.completed_count == 0);
     assert(waitpid(pid, &status, 0) == pid);
-    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
     assert(ninit_service_runtime_tracked_count(runtime) == 0);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 1);
 
     ninit_service_runtime_destroy(runtime);
     ninit_dependency_plan_destroy(plan);
