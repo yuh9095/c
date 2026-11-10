@@ -282,6 +282,9 @@ mount_with_fd_api(const struct ninit_mount_entry *entry, int target_fd)
 #ifndef MOVE_MOUNT_F_EMPTY_PATH
 #define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
 #endif
+#ifndef MOVE_MOUNT_T_EMPTY_PATH
+#define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
+#endif
 #ifndef MOUNT_ATTR_NOSUID
 #define MOUNT_ATTR_NOSUID 0x00000002
 #endif
@@ -324,7 +327,7 @@ mount_with_fd_api(const struct ninit_mount_entry *entry, int target_fd)
         goto out;
 
     if (syscall(SYS_move_mount, mount_fd, "", target_fd, "",
-                MOVE_MOUNT_F_EMPTY_PATH) < 0)
+                (MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH)) < 0)
         goto out;
 
     result = 0;
