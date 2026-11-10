@@ -33,6 +33,7 @@ add_library(ninit-init-core STATIC
     src/init/manager_supervisor.c
     src/init/pid1_runtime.c
     src/init/pid1_events.c
+    src/init/pid1_setup.c
     src/init/boot_coordinator.c
 )
 target_link_libraries(ninit-init-core PUBLIC ninit-common)
@@ -91,6 +92,11 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-pid1-runtime PRIVATE ninit-init-core)
     target_compile_options(test-pid1-runtime PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME pid1-runtime COMMAND test-pid1-runtime)
+
+    add_executable(test-pid1-setup tests/test_pid1_setup.c)
+    target_link_libraries(test-pid1-setup PRIVATE ninit-init-core)
+    target_compile_options(test-pid1-setup PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME pid1-setup COMMAND test-pid1-setup)
 
     add_executable(test-pid1-events tests/test_pid1_events.c)
     target_link_libraries(test-pid1-events PRIVATE ninit-init-core)
