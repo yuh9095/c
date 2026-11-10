@@ -102,18 +102,20 @@ Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before
 该模块只生成计划，不创建 Job、不 fork/exec，也不跟踪服务状态。当前实现使用邻接矩阵表达排序边，适合当前小规模原生 Unit 集合；后续规模扩大时再评估稀疏图结构。
 
 
-## Job Manager（Start Job 第一版）
+## Job Manager（Start/Stop Job）
 
-`include/ninit/job_manager.h` 提供内存中的 Start Job 调度核心：
+`include/ninit/job_manager.h` 提供内存中的 Start/Stop Job 调度核心：
 
 - 提交时复制 Dependency Plan 中的 Unit 借用指针和 wave 编号；Unit Manager 必须比 Job Manager/Job 活得更久。
 - 每个 Job 可设置最大并发数；同一 wave 可并行派发，后续 wave 必须等待当前 wave 全部完成。
-- 执行器通过 dispatch 领取 Unit，再通过 complete 报告成功或失败。
-- 任一 Unit 启动失败会将 Job 标记 FAILED，并跳过尚未派发的 Unit；已派发任务仍可回报完成。
+- Start Job 按正向依赖波次派发；Stop Job 反转 wave 顺序，并在同一 wave 内按计划注册顺序逆序派发。
+- 执行器通过 dispatch 领取 Unit，再通过 complete 报告成功或失败；`ninit_job_manager_is_stop()` 用于区分事务方向。
+- 任一 Unit 操作失败会将 Job 标记 FAILED，并跳过尚未派发的 Unit；已派发任务仍可回报完成。
 - cancel 会跳过未派发任务；已运行任务仍由执行器完成/收尾。
 - Job 状态可查询；Job 记录保留到 Job Manager 销毁。
 
-当前只实现 Start Job 的调度状态机，不执行 fork/exec，不负责服务进程监督，也未实现 Stop/Restart/Reload、Job 合并或跨 Job 冲突处理。失败后已派发的任务由上层执行器负责停止或清理。
+Job Manager 只负责调度，不直接发送信号或执行进程操作。Restart/Reload、Job 合并和跨 Job 冲突处理尚未实现。
+
 
 
 ## Service Executor（第一版）
@@ -157,7 +159,7 @@ ninit-manager --ipc-fd 3 --unit-dir /etc/ninit/units --target default.target
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。`ninit_service_runtime_signal_all()` 可向所有已跟踪子进程发送信号，但不负责 waitpid；Manager 在退出清理阶段发送 SIGKILL，并继续通过 exec 握手 fd 与统一 child reaper 处理所有子进程，直到 Runtime 跟踪记录清空。当前尚未实现面向正常 Stop Job 的优雅停止、进程组、超时、重启策略、Unit 配置加载和 Job 提交。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。Stop Job 会按逆依赖顺序定位已跟踪的 Service，发送 SIGTERM，并将 Stop Job 项关联到进程记录；只有 child-exit 已由统一 reaper 回收、且 exec handshake 已处理后，才完成该停止项。未运行的 Service 和 Target 可立即完成停止项。Manager 退出时优先提交 Stop Job，等待服务退出；5 秒宽限期后仍存活的进程会收到 SIGKILL，随后仍通过 exec handshake 与统一 child reaper 清理。若没有可用的启动 plan，则使用 SIGTERM 广播和相同的宽限期/强制回收路径。该机制尚未提供 Unit 自定义 TimeoutStopSec、ExecStop、进程组/cgroup 管理或 Restart 策略。
 
 ## PID 1 executable
 
