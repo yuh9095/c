@@ -27,6 +27,15 @@ int ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                                    uint64_t job_id,
                                    pid_t *started_pid);
 
+/* Number of Service processes whose exec handshake is still pending. */
+size_t ninit_service_runtime_exec_pending_count(
+    const struct ninit_service_runtime *runtime);
+
+/* Get the PID and pollable fd of the pending handshake at index. */
+int ninit_service_runtime_exec_pending_at(
+    const struct ninit_service_runtime *runtime, size_t index,
+    pid_t *pid, int *exec_fd);
+
 /* Obtain the exec-error pipe fd for polling; -1 means no pending handshake. */
 int ninit_service_runtime_exec_fd(
     const struct ninit_service_runtime *runtime, pid_t pid);
