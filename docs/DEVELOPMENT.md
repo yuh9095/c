@@ -246,3 +246,13 @@ The file is optional; when absent, `auto` is selected. A command-line
 `--environment` value takes precedence over the file. Duplicate assignments,
 unknown keys, and malformed values are rejected. Service-level environment
 keywords are not implemented yet.
+
+
+### Virtual machine versus container detection
+
+Ninit classifies WSL as a virtual-machine guest, not as a container. A VM may
+initialize guest-local procfs, sysfs, and devtmpfs when needed, while host
+shutdown and host-level cgroup management remain disabled. Container policy
+continues to preserve runtime-provided mounts. These policy flags are advisory:
+future mount and shutdown implementations must inspect the current namespace,
+mount table, capabilities, and syscall results before acting.
