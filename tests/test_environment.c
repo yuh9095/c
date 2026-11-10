@@ -39,7 +39,7 @@ main(void)
     snprintf(path, sizeof(path), "%s/proc", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/1", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); make_dir(path);
-    snprintf(path, sizeof(path), "%s/proc/self/status", root); make_file(path, "Name:\\tninit\\n");
+    snprintf(path, sizeof(path), "%s/proc/self/status", root); make_file(path, "Name:\tninit\n");
     snprintf(path, sizeof(path), "%s/run", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/run/systemd", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/etc", root); make_dir(path);
@@ -99,23 +99,23 @@ main(void)
     assert(policy.allow_host_shutdown == 0);
 
     /* systemd does not infer a container from cgroup path names. */
-    make_file(path, "0::/system.slice/docker-0123456789.scope\\n");
+    make_file(path, "0::/system.slice/docker-0123456789.scope\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
 
     /* Proot is detected through the process named by TracerPid. */
     snprintf(path, sizeof(path), "%s/proc/123", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/123/comm", root);
-    make_file(path, "proot\\n");
+    make_file(path, "proot\n");
     snprintf(path, sizeof(path), "%s/proc/self/status", root);
-    make_file(path, "Name:\\tninit\\nTracerPid:\\t123\\n");
+    make_file(path, "Name:\tninit\nTracerPid:\t123\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_PROOT);
     snprintf(path, sizeof(path), "%s/proc/123/comm", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/123", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc/self/status", root);
-    make_file(path, "Name:\\tninit\\n");
+    make_file(path, "Name:\tninit\n");
 
 
     /* The inherited container= variable is authoritative only for PID 1. */
@@ -202,7 +202,7 @@ main(void)
     snprintf(path, sizeof(path), "%s/proc/sys", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel", root); make_dir(path);
     snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root);
-    make_file(path, "6.6.0-microsoft-standard-WSL2\\n");
+    make_file(path, "6.6.0-microsoft-standard-WSL2\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE);
     assert(environment.virtual_machine == NINIT_VM_WSL);
