@@ -2,6 +2,7 @@
 
 #include <ninit/manager_supervisor.h>
 #include <ninit/pid1_runtime.h>
+#include <ninit/pid1_setup.h>
 
 #include <errno.h>
 #include <signal.h>
@@ -11,6 +12,7 @@
 #include <time.h>
 
 #define DEFAULT_MANAGER_PATH "/usr/bin/ninit-manager"
+#define DEFAULT_CONSOLE_PATH "/dev/console"
 #define DEFAULT_UNIT_DIR "/etc/ninit/units"
 #define DEFAULT_TARGET "default.target"
 
@@ -76,6 +78,11 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
         return;
     }
 
+    if (ninit_pid1_setup_console(console_path) < 0) {
+        perror("ninit-init: setup console");
+        return 1;
+    }
+
     if (get_monotonic_time(&now) < 0) {
         now.tv_sec = 0;
         now.tv_nsec = 0;
@@ -88,13 +95,15 @@ static void
 usage(const char *program)
 {
     fprintf(stderr,
-            "Usage: %s [--manager PATH] [--unit-dir DIR --target NAME]\n",
+            "Usage: %s [--console PATH] [--manager PATH] "
+            "[--unit-dir DIR --target NAME]\n",
             program);
 }
 
 int
 main(int argc, char **argv)
 {
+    const char *console_path = DEFAULT_CONSOLE_PATH;
     const char *manager_path = DEFAULT_MANAGER_PATH;
     const char *unit_dir = DEFAULT_UNIT_DIR;
     const char *target = DEFAULT_TARGET;
@@ -107,7 +116,9 @@ main(int argc, char **argv)
     int events_ready = 0;
 
     for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--manager") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--console") == 0 && i + 1 < argc) {
+            console_path = argv[++i];
+        } else if (strcmp(argv[i], "--manager") == 0 && i + 1 < argc) {
             manager_path = argv[++i];
         } else if (strcmp(argv[i], "--unit-dir") == 0 && i + 1 < argc) {
             unit_dir = argv[++i];
