@@ -2,11 +2,11 @@
 
 **Ninit** 是一个面向 Linux 的独立 Init 与系统服务管理项目，使用 C 语言开发。
 
-项目目标是提供清晰、模块化、可维护的系统初始化与服务管理能力。Ninit 借鉴 Dinit、OpenRC 和 systemd 等成熟项目的设计经验，但定义自己的原生配置格式、内部模型和行为语义，而不是简单拼接或复制其他项目。
+Ninit 借鉴 Dinit、OpenRC 和 systemd 等成熟项目的设计经验，但定义自己的原生配置格式、内部模型和行为语义，而不是简单拼接或复制其他项目。
 
 > **项目状态：早期开发 / 设计阶段**
 >
-> 当前仓库用于建立 Ninit 的项目基础。功能、接口和配置规范仍在设计与实现中，暂不适合用于生产系统。
+> 当前仓库是工程起点，尚未实现可用于真实系统启动的 PID 1 或完整服务管理功能。请勿将当前程序配置为系统 init。
 
 ## 项目目标
 
@@ -15,8 +15,8 @@
 - 采用模块化设计，明确各模块的职责和接口。
 - 定义 Ninit 自己的 Unit、依赖关系、服务生命周期和 Job 语义。
 - 提供服务状态查询、控制和日志查看能力。
-- 在必要时复用成熟的 systemd 库或其他第三方组件，但不依赖 systemd Manager。
-- 兼容 musl 和 glibc 环境。
+- 必要时复用成熟的 systemd 库或其他第三方组件，但不依赖 systemd Manager。
+- 使用一套源码和构建规则支持 musl、glibc 两种构建目标。
 
 ## 设计原则
 
@@ -26,7 +26,7 @@
 4. **模块化**：功能源码分离，通过明确的模块 API 交互。
 5. **边界清晰**：第三方库通过适配层接入，不能决定 Ninit 的核心语义。
 6. **可靠性优先**：PID 1 保持精简，服务管理器故障不能使系统失去 PID 1。
-7. **可移植构建**：一份源码、一套构建规则，同时验证 musl 和 glibc。
+7. **统一构建**：一份源码、一套构建规则，分别验证 musl 和 glibc。
 
 ## 架构概览
 
@@ -73,7 +73,7 @@ PID 1 与 Manager 通过内部 IPC 通信。具体协议、进程归属和故障
 | Logging | 服务日志采集、存储和查询 |
 | Compatibility | systemd Unit 文件兼容层 |
 
-上述列表是规划，不代表所有模块已经实现，也不代表首个版本会同时提供全部功能。
+上述列表是规划，不代表所有模块已经实现。
 
 ## 兼容性策略
 
@@ -93,12 +93,7 @@ Ninit 将提供自己的原生 Unit 格式和配置语义。原生接口是项�
 
 Ninit 使用一套源码和统一构建系统，不维护 musl 与 glibc 两套代码分支。
 
-构建目标包括：
-
-- musl 环境。
-- glibc 环境。
-
-同一份源码和构建规则应分别在对应工具链下构建，生成各自 ABI 兼容的程序和库。musl 与 glibc 构建产物通常不能直接互换。
+同一份源码和构建规则分别在对应工具链下构建，生成各自 ABI 兼容的程序和库。musl 与 glibc 构建产物通常不能直接互换。
 
 优先使用标准 C、POSIX 和 Linux 接口。确有必要时，通过统一适配层处理 libc 差异。
 
@@ -106,16 +101,34 @@ Ninit 使用一套源码和统一构建系统，不维护 musl 与 glibc 两套�
 
 Ninit 可以在必要时使用 systemd 提供的独立库或其他成熟组件，例如服务通知、Journal 或 D-Bus 相关接口。
 
-依赖管理遵循以下原则：
-
 - 第三方依赖统一管理版本、补丁和构建规则。
 - 使用同一份依赖源码，分别为 musl 和 glibc 目标构建。
 - 只链接实际使用的组件，不要求把所有 systemd 库都链接进 Ninit。
 - Ninit 核心不依赖 systemd Manager，也不将 systemd 的内部服务管理实现作为自身核心。
 
-## 开发路线
+## 快速构建
 
-初步开发顺序：
+需要 CMake、C 编译器和 Ninja 或 Make。
+
+glibc：
+
+```sh
+cmake -S . -B build -DCMAKE_C_COMPILER=gcc
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+musl（需要提供 `musl-gcc` 的工具链）：
+
+```sh
+cmake -S . -B build-musl -DCMAKE_C_COMPILER=musl-gcc
+cmake --build build-musl
+ctest --test-dir build-musl --output-on-failure
+```
+
+更多开发约束和当前实现状态见 [开发说明](docs/DEVELOPMENT.md)。
+
+## 开发路线
 
 1. 建立统一构建系统、基础目录结构和测试框架。
 2. 实现 PID 1 的最小可靠功能。
