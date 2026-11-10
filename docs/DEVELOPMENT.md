@@ -77,7 +77,8 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 当前第一版 Unit Manager 提供内存中的原生 Unit 注册表，不负责解析配置文件或启动进程。
 
 - 支持 `service` 与 `target` 两种 Unit 类型。
-- 每个 Unit 有唯一名称，可选 description 和 ExecStart。
+- 每个 Unit 有唯一名称和可选 description；service 必须提供 ExecStart argv，target 不允许 ExecStart。
+- ExecStart 按 argv 数组保存并交给后续执行器直接 exec，不经过 shell 字符串解析。
 - Unit 可声明 Requires、Wants、After、Before 名称列表。
 - 注册时深拷贝定义及依赖名称；调用者可在 add 返回后释放输入缓冲区。
 - 重复名称返回 `EEXIST`，非法名称/定义返回 `EINVAL`。
