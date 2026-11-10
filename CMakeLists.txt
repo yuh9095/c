@@ -42,6 +42,7 @@ target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
 add_library(ninit-manager-core STATIC
     src/manager/unit_manager.c
     src/manager/dependency_plan.c
+    src/manager/job_manager.c
 )
 target_link_libraries(ninit-manager-core PUBLIC ninit-common)
 target_include_directories(ninit-manager-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -112,4 +113,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-dependency-plan PRIVATE ninit-manager-core)
     target_compile_options(test-dependency-plan PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME dependency-plan COMMAND test-dependency-plan)
+
+    add_executable(test-job-manager tests/test_job_manager.c)
+    target_link_libraries(test-job-manager PRIVATE ninit-manager-core)
+    target_compile_options(test-job-manager PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME job-manager COMMAND test-job-manager)
 endif()
