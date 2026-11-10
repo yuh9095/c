@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 static void
@@ -16,7 +17,7 @@ wait_for_exec(pid_t pid, int fd, int expected_result, int expected_errno)
     for (attempts = 0; attempts < 1000; ++attempts) {
         result = ninit_service_executor_check_exec(fd);
         if (result != 0) break;
-        usleep(1000);
+        { struct timespec delay = { 0, 1000000L };\n          (void) nanosleep(&delay, NULL); }
     }
     assert(result == expected_result);
     if (expected_result < 0) assert(errno == expected_errno);
