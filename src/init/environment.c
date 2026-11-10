@@ -498,6 +498,7 @@ ninit_environment_probe_capabilities(
                 char *save = NULL;
                 char *token;
                 char *mountpoint = NULL;
+                char *mount_options = NULL;
                 char *separator = NULL;
                 char *filesystem = NULL;
                 int root_shared = 0;
@@ -508,6 +509,8 @@ ninit_environment_probe_capabilities(
                     field++;
                     if (field == 5)
                         mountpoint = token;
+                    else if (field == 6)
+                        mount_options = token;
                     else if (field > 6 && strncmp(token, "shared:", 7) == 0)
                         root_shared = 1;
                     if (strcmp(token, "-") == 0) {
@@ -517,17 +520,27 @@ ninit_environment_probe_capabilities(
                     }
                     token = strtok_r(NULL, " ", &save);
                 }
-                if (mountpoint == NULL || separator == NULL ||
-                    filesystem == NULL)
+                if (mountpoint == NULL || mount_options == NULL ||
+                    separator == NULL || filesystem == NULL)
                     continue;
                 mountpoint[strcspn(mountpoint, "\r\n")] = '\0';
                 filesystem[strcspn(filesystem, "\r\n")] = '\0';
                 decode_mount_field(mountpoint);
 
                 if (strcmp(mountpoint, "/") == 0) {
+                    char *option_save = NULL;
+                    char *option;
                     capabilities->root_mount_found = 1;
                     if (root_shared)
                         capabilities->root_mount_shared = 1;
+                    option = strtok_r(mount_options, ",", &option_save);
+                    while (option != NULL) {
+                        if (strcmp(option, "ro") == 0)
+                            capabilities->root_mount_read_only = 1;
+                        else if (strcmp(option, "rw") == 0)
+                            capabilities->root_mount_read_only = 0;
+                        option = strtok_r(NULL, ",", &option_save);
+                    }
                 }
                 if (strcmp(mountpoint, "/proc") == 0 &&
                     strcmp(filesystem, "proc") == 0)
