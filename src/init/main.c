@@ -166,6 +166,7 @@ main(int argc, char **argv)
         return 1;
     }
     ninit_environment_get_policy(&environment, &environment_policy);
+    memset(&environment_capabilities, 0, sizeof(environment_capabilities));
     if (ninit_environment_probe_capabilities(
             "/", &environment_capabilities) == 0) {
         fprintf(stderr, "ninit-init: capability probe: mountinfo=%s status=%s "
