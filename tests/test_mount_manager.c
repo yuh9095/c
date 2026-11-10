@@ -97,6 +97,26 @@ main(void)
     assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == 0);
     assert(state.calls == 2);
     assert(strcmp(state.last_target, "/tmp") != 0);
+
+    /* A namespace mismatch blocks a previously valid plan. */
+    {
+        char other[512];
+        char target[512];
+        snprintf(other, sizeof(other), "%s/proc/other-ns", root);
+        write_file(other, "different namespace");
+        snprintf(path, sizeof(path), "%s/proc/1/ns/mnt", root);
+        assert(unlink(path) == 0);
+        assert(symlink(other, path) == 0);
+        errno = 0;
+        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(errno == EPERM);
+        assert(state.calls == 2);
+        assert(unlink(path) == 0);
+        snprintf(target, sizeof(target), "%s/proc/ns-mnt", root);
+        assert(symlink(target, path) == 0);
+        snprintf(path, sizeof(path), "%s/proc/other-ns", root);
+        unlink(path);
+    }
     assert(strstr(state.last_target, "/dev") != NULL);
 
     /* A stale plan must not mount over a mount added after planning. */
