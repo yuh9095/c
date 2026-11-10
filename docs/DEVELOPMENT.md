@@ -187,20 +187,23 @@ conservative startup policy. The first implementation follows the layered
 approach used by systemd's `detect_container()` and OpenRC's
 `detect_container()`/`rc_sys` model:
 
-- `/run/systemd/container` is the highest-priority explicit runtime marker;
-- the inherited `container` environment variable is accepted only when Ninit is PID 1;
-- Proot is detected through `TracerPid` and the tracer process command name;
-- `/run/host/container-manager` identifies a container manager when present;
-- `/run/.containerenv` and `/.dockerenv` identify Podman and Docker;
+- OpenVZ is checked first using `/proc/vz` and the absence of host-only `/proc/bc`;
 - WSL kernel/interop markers identify a VM guest, not a container;
-- OpenVZ uses `/proc/vz` together with the absence of host-only `/proc/bc`;
-- cgroup path names are deliberately not used to infer a container family:
+- Proot is detected through `TracerPid` and the tracer process command name;
+- `/run/host/container-manager` is preferred because it is readable without
+  privileged access;
+- for PID 1, the inherited `container` variable is authoritative when set
+  (an empty value means no container); non-PID-1 processes instead consult
+  `/run/systemd/container`;
+- `/run/.containerenv` and `/.dockerenv` are checked last, in that order, so
+  generic image markers do not override a more specific manager hint;
+- an `oci` hint is not treated as a runtime: Ninit checks the Podman/Docker
+  marker files and otherwise classifies it as `OTHER`;
+- cgroup path names are deliberately not used to infer a container family;
   they are not a reliable systemd container identity signal;
-- WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
-  verifies that the opened handle is a PID namespace; only then is namespace
-  evidence recorded. A visible parent proves the current PID namespace is
-  nested; `EPERM`/`ENOTTY` is inconclusive and remains UNKNOWN rather than
-  comparing against a kernel-internal inode constant.
+- as a final PID-1 fallback, Ninit uses nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT`
+  to recognize a verifiably nested PID namespace. `EPERM`/`ENOTTY` is
+  inconclusive and remains UNKNOWN rather than comparing inode constants.
 
 The result records the environment kind, recognized container family and
 evidence bits. Failure to inspect procfs or conclusively determine the PID
