@@ -28,7 +28,10 @@ target_include_directories(ninit-common
 )
 target_compile_options(ninit-common PRIVATE -Wall -Wextra -Wpedantic)
 
-add_library(ninit-init STATIC src/init/manager_process.c)
+add_library(ninit-init STATIC
+    src/init/manager_process.c
+    src/init/manager_supervisor.c
+)
 target_link_libraries(ninit-init PUBLIC ninit-common)
 target_include_directories(ninit-init PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_options(ninit-init PRIVATE -Wall -Wextra -Wpedantic)
@@ -68,4 +71,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-manager-spawn PRIVATE ninit-init)
     target_compile_options(test-manager-spawn PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME manager-spawn COMMAND test-manager-spawn $<TARGET_FILE:ninit-manager>)
+
+    add_executable(test-manager-supervisor tests/test_manager_supervisor.c)
+    target_link_libraries(test-manager-supervisor PRIVATE ninit-init)
+    target_compile_options(test-manager-supervisor PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME manager-supervisor COMMAND test-manager-supervisor $<TARGET_FILE:ninit-manager>)
 endif()
