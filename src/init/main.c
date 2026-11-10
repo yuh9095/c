@@ -171,7 +171,8 @@ main(int argc, char **argv)
             "/", &environment_capabilities) == 0) {
         fprintf(stderr, "ninit-init: capability probe: mountinfo=%s status=%s "
                 "CAP_SYS_ADMIN=%s CAP_SYS_BOOT=%s mount-ns=%s "
-                "matches-pid1=%s inode=%llu\n",
+                "matches-pid1=%s inode=%llu root-mount=%s "
+                "root-shared=%s\n",
                 environment_capabilities.mountinfo_available ? "yes" : "no",
                 environment_capabilities.status_available ? "yes" : "no",
                 environment_capabilities.status_available ?
@@ -185,7 +186,11 @@ main(int argc, char **argv)
                     (environment_capabilities.mount_namespace_matches_pid1 ?
                         "yes" : "no") : "unknown",
                 (unsigned long long)
-                    environment_capabilities.mount_namespace_inode);
+                    environment_capabilities.mount_namespace_inode,
+                environment_capabilities.root_mount_found ? "yes" : "no",
+                environment_capabilities.root_mount_found ?
+                    (environment_capabilities.root_mount_shared ? "yes" : "no") :
+                    "unknown");
     }
     if (environment_capabilities.mountinfo_available &&
         ninit_mount_manager_plan("/", &environment_policy,
