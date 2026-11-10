@@ -1,0 +1,59 @@
+#include <ninit/job_manager.h>
+#include <assert.h>
+#include <errno.h>
+#include <string.h>
+
+static void add_target(struct ninit_unit_manager *m, const char *name,
+ const char *const *req, size_t nr, const char *const *after, size_t na)
+{
+    struct ninit_unit_spec s = { name, NULL, NINIT_UNIT_TARGET, NULL, 0,
+        req, nr, NULL, 0, after, na, NULL, 0 };
+    assert(ninit_unit_manager_add(m, &s) == 0);
+}
+int main(void)
+{
+    struct ninit_unit_manager *units = ninit_unit_manager_create();
+    struct ninit_job_manager *jobs = ninit_job_manager_create();
+    struct ninit_dependency_plan *plan = NULL;
+    struct ninit_job_info info;
+    const struct ninit_unit *unit;
+    const char *requires[] = { "a.target", "b.target" };
+    const char *after_a[] = { "a.target" }, *after_b[] = { "b.target" };
+    size_t index;
+    uint64_t id;
+    assert(units && jobs);
+    add_target(units, "a.target", NULL, 0, NULL, 0);
+    add_target(units, "b.target", NULL, 0, NULL, 0);
+    add_target(units, "root.target", requires, 2, after_a, 1);
+    /* b is also ordered before root, so a and b form the first parallel wave. */
+    {
+        struct ninit_unit_spec root = { "root.target", NULL, NINIT_UNIT_TARGET,
+            NULL, 0, requires, 2, NULL, 0, after_a, 1, NULL, 0 };
+        (void)root;
+    }
+    assert(ninit_dependency_plan_build(units, "root.target", &plan) == 0);
+    assert(ninit_job_manager_submit_start(jobs, plan, 2, &id) == 0);
+    assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 1);
+    assert(strcmp(unit->name, "a.target") == 0);
+    {
+        const struct ninit_unit *second;
+        size_t second_index;
+        assert(ninit_job_manager_dispatch(jobs, id, &second, &second_index) == 1);
+        assert(strcmp(second->name, "b.target") == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &second, &second_index) == 0);
+        assert(ninit_job_manager_complete(jobs, id, index, 1, 0) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &second, &second_index) == 0);
+        assert(ninit_job_manager_complete(jobs, id, second_index, 1, 0) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &second, &second_index) == 1);
+        assert(strcmp(second->name, "root.target") == 0);
+        assert(ninit_job_manager_complete(jobs, id, second_index, 1, 0) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &second, &second_index) == 0);
+    }
+    assert(ninit_job_manager_get_info(jobs, id, &info) == 0);
+    assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 3);
+
+    ninit_dependency_plan_destroy(plan);
+    ninit_job_manager_destroy(jobs);
+    ninit_unit_manager_destroy(units);
+    return 0;
+}
