@@ -200,16 +200,19 @@ approach used by systemd's `detect_container()` and OpenRC's
 
 The result records the environment kind, recognized container family and
 evidence bits. Failure to inspect procfs or conclusively determine the PID
-namespace is represented as UNKNOWN, not HOST. `NS_GET_PARENT` can return
-`EPERM` both for the initial PID namespace and when its parent is outside the
-caller's namespace scope; Ninit treats this ambiguity conservatively. An
-administrator can explicitly select `Environment=host` (or
-`--environment host`) after verifying the boot environment. UNKNOWN and
-CONTAINER receive a restrictive policy: no host reboot, no
-host cgroup management, and no automatic replacement of proc/sys/dev mounts.
-HOST-like environments receive permission flags for later mount and shutdown
-stages; the flags are not proof that an operation is permitted, and every
-mount operation must still check existing mounts and handle kernel errors.
+namespace is represented as UNKNOWN, not HOST. Procfs availability,
+a root-looking cgroup path, or sharing a namespace with PID 1 does not prove
+that the process is in the host's initial namespaces. `NS_GET_PARENT` can
+return `EPERM` both for the initial PID namespace and when its parent is
+outside the caller's namespace scope; Ninit treats this ambiguity
+conservatively. Automatic detection therefore never promotes an inconclusive
+result to HOST. An administrator can explicitly select `Environment=host`
+(or `--environment host`) after verifying the boot environment. UNKNOWN and
+CONTAINER receive a restrictive policy: no host reboot, no host cgroup
+management, and no automatic replacement of proc/sys/dev mounts. Only an
+explicit HOST override enables the host policy; even then, its permission
+flags are not proof that an operation is permitted, and every mount operation
+must still check existing mounts and handle kernel errors.
 
 PID 1 currently performs detection before console setup and reports the
 selected environment. The policy is not yet connected to early mount setup,
