@@ -176,6 +176,30 @@ main(void)
         assert(errno == EINVAL);
     }
 
+    /*
+     * Replanning from mountinfo reconstructs completed state without relying
+     * on an in-memory result from the previous apply operation.
+     */
+    {
+        snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+        write_file(path,
+            "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+            "10 1 0:2 / /proc rw - proc proc rw\n"
+            "11 1 0:3 / /sys rw - sysfs sysfs rw\n"
+            "12 1 0:4 / /dev rw - devtmpfs devtmpfs rw\n");
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
+        assert(plan.entries[1].action == NINIT_MOUNT_SKIP);
+        assert(plan.entries[2].action == NINIT_MOUNT_SKIP);
+        write_file(path,
+            "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+            "10 1 0:2 / /proc rw - proc proc rw\n");
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
+        assert(plan.entries[1].action == NINIT_MOUNT_APPLY);
+        assert(plan.entries[2].action == NINIT_MOUNT_APPLY);
+    }
+
     /* Reject truncated or forged plans before invoking any mount callback. */
     {
         size_t saved_count = plan.count;
