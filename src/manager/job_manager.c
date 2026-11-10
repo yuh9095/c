@@ -14,6 +14,7 @@ struct job {
     enum ninit_job_state state;
     struct job_item *items;
     size_t count, wave_count, current_wave, running, completed, max_parallel;
+    int is_stop;
     int error_code;
     struct job *next;
 };
@@ -52,10 +53,10 @@ ninit_job_manager_destroy(struct ninit_job_manager *manager)
     free(manager);
 }
 
-int
-ninit_job_manager_submit_start(struct ninit_job_manager *manager,
+static int
+submit_plan(struct ninit_job_manager *manager,
     const struct ninit_dependency_plan *plan, size_t max_parallel,
-    uint64_t *job_id)
+    uint64_t *job_id, int is_stop)
 {
     struct job *job;
     size_t i, count;
@@ -81,9 +82,12 @@ ninit_job_manager_submit_start(struct ninit_job_manager *manager,
     job->count = count;
     job->wave_count = ninit_dependency_plan_wave_count(plan);
     job->max_parallel = max_parallel;
+    job->is_stop = is_stop;
     for (i = 0; i < count; ++i) {
         job->items[i].unit = ninit_dependency_plan_unit(plan, i);
         job->items[i].wave = ninit_dependency_plan_wave(plan, i);
+        if (is_stop)
+            job->items[i].wave = job->wave_count - 1 - job->items[i].wave;
         if (job->items[i].unit == NULL || job->items[i].wave >= job->wave_count) {
             free(job->items); free(job); errno = EINVAL; return -1;
         }
@@ -92,6 +96,22 @@ ninit_job_manager_submit_start(struct ninit_job_manager *manager,
     manager->jobs = job;
     *job_id = job->id;
     return 0;
+}
+
+int
+ninit_job_manager_submit_start(struct ninit_job_manager *manager,
+    const struct ninit_dependency_plan *plan, size_t max_parallel,
+    uint64_t *job_id)
+{
+    return submit_plan(manager, plan, max_parallel, job_id, 0);
+}
+
+int
+ninit_job_manager_submit_stop(struct ninit_job_manager *manager,
+    const struct ninit_dependency_plan *plan, size_t max_parallel,
+    uint64_t *job_id)
+{
+    return submit_plan(manager, plan, max_parallel, job_id, 1);
 }
 
 static void
@@ -120,14 +140,15 @@ ninit_job_manager_dispatch(struct ninit_job_manager *manager, uint64_t id,
     for (;;) {
         int pending = 0;
         for (i = 0; i < job->count; ++i) {
-            if (job->items[i].wave == job->current_wave &&
-                job->items[i].state == ITEM_PENDING) {
+            size_t item_index = job->is_stop ? job->count - 1 - i : i;
+            if (job->items[item_index].wave == job->current_wave &&
+                job->items[item_index].state == ITEM_PENDING) {
                 pending = 1;
                 if (job->running < job->max_parallel) {
-                    job->items[i].state = ITEM_RUNNING;
+                    job->items[item_index].state = ITEM_RUNNING;
                     ++job->running;
-                    *unit = job->items[i].unit;
-                    *plan_index = i;
+                    *unit = job->items[item_index].unit;
+                    *plan_index = item_index;
                     return 1;
                 }
             }
