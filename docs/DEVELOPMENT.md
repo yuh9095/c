@@ -234,6 +234,15 @@ a potentially unsafe host policy. `host` is an explicit trust decision: it
 enables the host policy even if runtime markers say container, so it must only
 be used by an administrator who controls the boot configuration.
 
-This first override is currently exposed through the PID 1 command line and
-the detector API. A persistent configuration file and service-level
-environment keywords are not implemented yet.
+The persistent configuration file is `/etc/ninit/environment.conf` and uses
+one assignment:
+
+```ini
+Environment=auto
+# or: Environment=container:lxc
+```
+
+The file is optional; when absent, `auto` is selected. A command-line
+`--environment` value takes precedence over the file. Duplicate assignments,
+unknown keys, and malformed values are rejected. Service-level environment
+keywords are not implemented yet.
