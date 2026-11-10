@@ -11,6 +11,9 @@
 #include <ninit/ipc_channel.h>
 #include <ninit/ipc_handshake.h>
 #include <ninit/job_manager.h>
+#include <ninit/unit_manager.h>
+#include <ninit/unit_file.h>
+#include <ninit/dependency_plan.h>
 #include <ninit/manager_child_reaper.h>
 #include <ninit/service_runtime.h>
 #include <ninit/version.h>
@@ -18,7 +21,7 @@
 static void
 print_usage(const char *program)
 {
-    printf("Usage: %s [--version|--help|--ipc-fd FD]\n", program);
+    printf("Usage: %s [--version|--help] --ipc-fd FD [--unit-dir DIR --target NAME]\n", program);
     puts("Ninit service manager (early development).");
 }
 
@@ -112,7 +115,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
 }
 
 static int
-run_manager(int fd)
+run_manager(int fd, const char *unit_dir, const char *target)
 {
     unsigned char buffer[NINIT_IPC_HEADER_SIZE + NINIT_IPC_MAX_PAYLOAD];
     const unsigned char *payload = NULL;
@@ -120,6 +123,8 @@ run_manager(int fd)
     struct pollfd *descriptors;
     pid_t *exec_pids;
     struct ninit_job_manager *jobs = NULL;
+    struct ninit_unit_manager *units = NULL;
+    struct ninit_dependency_plan *plan = NULL;
     struct ninit_service_runtime *runtime = NULL;
     struct ninit_manager_child_reaper *reaper = NULL;
     size_t pending_count;
@@ -127,6 +132,7 @@ run_manager(int fd)
     short ipc_events;
     int result;
     int exit_code = 1;
+    uint64_t startup_job_id = 0;
 
     jobs = ninit_job_manager_create();
     if (jobs == NULL)
@@ -138,11 +144,51 @@ run_manager(int fd)
     if (reaper == NULL)
         goto cleanup;
 
+    if ((unit_dir == NULL) != (target == NULL)) {
+        errno = EINVAL;
+        fprintf(stderr, "ninit-manager: --unit-dir and --target must be used together\n");
+        goto cleanup;
+    }
+    if (unit_dir != NULL) {
+        units = ninit_unit_manager_create();
+        if (units == NULL)
+            goto cleanup;
+        if (ninit_unit_file_load_directory(units, unit_dir) < 0) {
+            fprintf(stderr, "ninit-manager: cannot load Unit directory %s: %s\n",
+                    unit_dir, strerror(errno));
+            goto cleanup;
+        }
+        if (ninit_unit_manager_find(units, target) == NULL) {
+            errno = ENOENT;
+            fprintf(stderr, "ninit-manager: target %s not found\n", target);
+            goto cleanup;
+        }
+        if (ninit_dependency_plan_build(units, target, &plan) < 0) {
+            fprintf(stderr, "ninit-manager: cannot build target %s: %s\n",
+                    target, strerror(errno));
+            goto cleanup;
+        }
+        if (ninit_job_manager_submit_start(jobs, plan, 4, &startup_job_id) < 0) {
+            fprintf(stderr, "ninit-manager: cannot submit startup job: %s\n",
+                    strerror(errno));
+            goto cleanup;
+        }
+    }
+
     result = ninit_ipc_handshake_manager(fd,
                                          NINIT_IPC_HANDSHAKE_TIMEOUT_MS);
     if (result != NINIT_IPC_OK) {
         fprintf(stderr, "ninit-manager: IPC handshake failed (%d)\n", result);
         goto cleanup;
+    }
+
+    if (plan != NULL) {
+        int dispatched;
+        do {
+            dispatched = ninit_service_runtime_dispatch(runtime, startup_job_id, NULL);
+        } while (dispatched > 0);
+        if (dispatched < 0)
+            goto cleanup;
     }
 
     for (;;) {
@@ -216,6 +262,18 @@ run_manager(int fd)
             goto cleanup;
         }
 
+        if (plan != NULL) {
+            int dispatched;
+            do {
+                dispatched = ninit_service_runtime_dispatch(runtime, startup_job_id, NULL);
+            } while (dispatched > 0);
+            if (dispatched < 0) {
+                free(exec_pids);
+                free(descriptors);
+                goto cleanup;
+            }
+        }
+
         ipc_events = descriptors[0].revents;
         free(exec_pids);
         free(descriptors);
@@ -253,6 +311,8 @@ cleanup:
                 strerror(errno));
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
+    ninit_dependency_plan_destroy(plan);
+    ninit_unit_manager_destroy(units);
     ninit_job_manager_destroy(jobs);
     return exit_code;
 }
@@ -261,28 +321,50 @@ int
 main(int argc, char **argv)
 {
     char *end = NULL;
-    long fd;
+    const char *unit_dir = NULL;
+    const char *target = NULL;
+    long fd = -1;
+    int i;
 
-    if (argc == 2 && strcmp(argv[1], "--version") == 0) {
-        printf("ninit-manager %s\n", NINIT_VERSION_STRING);
-        return 0;
-    }
-    if (argc == 1 || (argc == 2 && strcmp(argv[1], "--help") == 0)) {
-        print_usage(argv[0]);
-        return 0;
-    }
-    if (argc == 3 && strcmp(argv[1], "--ipc-fd") == 0) {
-        errno = 0;
-        fd = strtol(argv[2], &end, 10);
-        if (errno != 0 || end == argv[2] || *end != '\0' ||
-            fd < 0 || fd > 1048576) {
-            fprintf(stderr, "ninit-manager: invalid IPC descriptor\n");
+    for (i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--version") == 0 && argc == 2) {
+            printf("ninit-manager %s\n", NINIT_VERSION_STRING);
+            return 0;
+        }
+        if (strcmp(argv[i], "--help") == 0 && argc == 2) {
+            print_usage(argv[0]);
+            return 0;
+        }
+        if (strcmp(argv[i], "--ipc-fd") == 0 && i + 1 < argc) {
+            errno = 0;
+            fd = strtol(argv[++i], &end, 10);
+            if (errno != 0 || end == argv[i] || *end != '\0' ||
+                fd < 0 || fd > 1048576) {
+                fprintf(stderr, "ninit-manager: invalid IPC descriptor\n");
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--unit-dir") == 0 && i + 1 < argc) {
+            unit_dir = argv[++i];
+            if (*unit_dir == '\0') {
+                fprintf(stderr, "ninit-manager: empty Unit directory\n");
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
+            target = argv[++i];
+            if (*target == '\0') {
+                fprintf(stderr, "ninit-manager: empty target name\n");
+                return 2;
+            }
+        } else {
+            fprintf(stderr, "ninit-manager: unsupported or incomplete argument\n");
+            print_usage(argv[0]);
             return 2;
         }
-        return run_manager((int) fd);
     }
 
-    fprintf(stderr, "ninit-manager: unsupported argument\n");
-    print_usage(argv[0]);
-    return 2;
+    if (fd < 0 || ((unit_dir == NULL) != (target == NULL))) {
+        print_usage(argv[0]);
+        return 2;
+    }
+    return run_manager((int) fd, unit_dir, target);
 }
