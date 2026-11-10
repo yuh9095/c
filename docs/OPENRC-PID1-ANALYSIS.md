@@ -70,8 +70,9 @@ Ninit 不能直接照搬 `kill(-1, ...)` 或固定等待时间：Ninit 必须明
 - 通过唯一的非阻塞 `waitpid(-1, ...)` 路径回收所有已退出子进程，
   并将 PID 和 wait status 回调给调用方。
 
-这不是完整 PID 1，也没有安装信号处理器、事件循环、启动流程或电源
-操作。未来 PID 1 必须由单一事件循环调用该回收函数，并根据 PID 将
+当前已增加 OpenRC 风格的 self-pipe 信号事件源：处理函数只写入信号编号，
+由普通上下文 drain 回调；事件源负责 SIGCHLD、SIGTERM、SIGINT 和可用时
+SIGPWR。它仍不是完整 PID 1，也没有主事件循环、启动流程或电源操作。未来 PID 1 必须由单一事件循环调用该回收函数，并根据 PID 将
 Manager 退出事件交给 Manager Supervisor；其他子进程事件也必须由
 调用方明确处理，不能静默丢弃。
 
