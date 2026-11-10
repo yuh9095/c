@@ -187,12 +187,12 @@ main(int argc, char **argv)
         for (mount_index = 0; mount_index < mount_plan.count; mount_index++) {
             const struct ninit_mount_entry *entry =
                 &mount_plan.entries[mount_index];
-            fprintf(stderr, "ninit-init: mount plan: %s -> %s (%s)\\n",
+            fprintf(stderr, "ninit-init: mount plan: %s -> %s (%s)\n",
                     entry->path, entry->filesystem,
                     ninit_mount_action_name(entry->action));
         }
     } else {
-        fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\\n");
+        fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\n");
     }
 
     if (environment.kind == NINIT_ENVIRONMENT_CONTAINER) {
