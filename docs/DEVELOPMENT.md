@@ -114,3 +114,16 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 - Job 状态可查询；Job 记录保留到 Job Manager 销毁。
 
 当前只实现 Start Job 的调度状态机，不执行 fork/exec，不负责服务进程监督，也未实现 Stop/Restart/Reload、Job 合并或跨 Job 冲突处理。失败后已派发的任务由上层执行器负责停止或清理。
+
+
+## Service Executor（第一版）
+
+`include/ninit/service_executor.h` 提供 Service Unit 的 fork/exec 启动适配器：
+
+- 只接受 Service Unit，并直接使用 argv 数组调用 `execvp()`；不经过 shell。
+- 使用 CLOEXEC 错误管道区分 fork 成功与 exec 成功：exec 成功时 close-on-exec 使父进程读到 EOF；失败时子进程写回 errno 并以 127 退出。
+- 父进程通过非阻塞读端调用 `ninit_service_executor_check_exec()`，可在 PID 1 事件循环中等待握手完成。
+- 执行器不调用 wait/waitpid。子进程退出状态必须由 PID 1 的统一 `ninit_pid1_reap_children()` 回收并按 PID 路由。
+- Target 不创建进程，应由 Job 调度层直接完成。
+
+当前版本尚未把 PID、exec 握手 fd 和 Job ID 集成进 Manager 主循环，也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
