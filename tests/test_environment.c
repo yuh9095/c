@@ -104,6 +104,9 @@ main(void)
     options.is_pid1 = 1;
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    assert(environment.pid_namespace_available == 0);
+    assert(environment.pid_namespace_parent_visible == 0);
+    assert((environment.evidence & NINIT_ENV_EVIDENCE_PID_NAMESPACE) == 0);
     options.is_pid1 = 0;
     unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self/ns", root); rmdir(path);
