@@ -88,6 +88,10 @@ main(void)
     assert(environment.kind == NINIT_ENVIRONMENT_HOST);
     assert(environment.container == NINIT_CONTAINER_NONE);
     assert(environment.evidence == NINIT_ENV_EVIDENCE_OVERRIDE);
+    options.environment_override = "container:wsl";
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_VIRTUAL_MACHINE);
+    assert(environment.virtual_machine == NINIT_VM_WSL);
     options.environment_override = "container:docker";
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
