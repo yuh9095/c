@@ -22,6 +22,8 @@ main(void)
     struct ninit_job_info info;
     struct ninit_unit_spec spec;
     const char *argv[] = { "/bin/sleep", "30", NULL };
+    const char *stop_argv[] = { "/bin/true", NULL };
+    pid_t stop_pid;
     uint64_t job_id;
     pid_t pid;
     int result;
@@ -36,6 +38,8 @@ main(void)
     spec.type = NINIT_UNIT_SERVICE;
     spec.exec_start_argv = argv;
     spec.exec_start_argc = 2;
+    spec.exec_stop_argv = stop_argv;
+    spec.exec_stop_argc = 1;
     assert(ninit_unit_manager_add(units, &spec) == 0);
     assert(ninit_unit_manager_find(units, "smoke.service")->exec_start_argv[2] == NULL);
     assert(ninit_dependency_plan_build(units, "smoke.service", &plan) == 0);
@@ -74,6 +78,21 @@ main(void)
     assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_RUNNING && info.completed_count == 0);
+    assert(ninit_service_runtime_exec_pending_count(runtime) == 1);
+    assert(ninit_service_runtime_exec_pending_at(
+               runtime, 0, &stop_pid, &pending_fd) == 0);
+    assert(stop_pid > 0 && stop_pid != pid);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    exec_poll.revents = 0;
+    do {
+        result = poll(&exec_poll, 1, 3000);
+    } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, stop_pid) == 1);
+    assert(waitpid(stop_pid, &status, 0) == stop_pid);
+    assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
     assert(waitpid(pid, &status, 0) == pid);
     assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
