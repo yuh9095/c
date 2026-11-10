@@ -29,7 +29,8 @@ enum ninit_environment_evidence {
     NINIT_ENV_EVIDENCE_ENVIRONMENT  = 1U << 1,
     NINIT_ENV_EVIDENCE_MARKER       = 1U << 2,
     NINIT_ENV_EVIDENCE_CGROUP       = 1U << 3,
-    NINIT_ENV_EVIDENCE_OPENVZ       = 1U << 4,\n    NINIT_ENV_EVIDENCE_NAMESPACE    = 1U << 5
+    NINIT_ENV_EVIDENCE_OPENVZ       = 1U << 4,
+    NINIT_ENV_EVIDENCE_NAMESPACE    = 1U << 5
 };
 
 struct ninit_environment {
