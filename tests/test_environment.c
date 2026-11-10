@@ -85,14 +85,18 @@ main(void)
         assert(capabilities.cap_sys_boot == 1);
     }
 
-    /* A visible procfs with no container evidence is host-like. */
+    /*
+     * A visible procfs and an ordinary cgroup root do not prove that this
+     * process is in the host's initial namespaces. Auto detection stays
+     * UNKNOWN for non-PID-1 callers until positive evidence is available.
+     */
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
     make_file(path, "0::/\n");
     assert(ninit_environment_detect(&options, &environment) == 0);
-    assert(environment.kind == NINIT_ENVIRONMENT_HOST);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
     ninit_environment_get_policy(&environment, &policy);
-    assert(policy.allow_mount_proc == 1);
-    assert(policy.allow_host_shutdown == 1);
+    assert(policy.allow_mount_proc == 0);
+    assert(policy.allow_host_shutdown == 0);
 
     /*
      * A PID-1 namespace handle that cannot answer NS_GET_PARENT is
