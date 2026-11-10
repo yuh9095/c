@@ -4,7 +4,7 @@
 
 ## 传输约束
 
-第一版使用本地 Unix 域 `SOCK_SEQPACKET`，以保留消息边界。`ninit_ipc_socketpair()` 创建两个带 `CLOEXEC` 的私有端点；`ninit_ipc_send()` 发送一个完整帧，`ninit_ipc_receive()` 接收并验证一个完整帧。不能将此格式当作字节流并假定一次读取一定返回完整数据；传输层仍须处理截断、系统调用错误和对端关闭。
+第一版使用本地 Unix 域 `SOCK_SEQPACKET`，以保留消息边界。`ninit_ipc_socketpair()` 创建两个带 `CLOEXEC`、`NONBLOCK` 的私有端点；`ninit_ipc_send()` 发送一个完整帧，`ninit_ipc_receive()` 接收并验证一个完整帧。不能将此格式当作字节流并假定一次读取一定返回完整数据；传输层仍须处理截断、系统调用错误和对端关闭。
 
 PID 1 与 Manager 之间的通道应由 PID 1 创建并通过受控的文件描述符传递给 Manager，而不是开放一个可被普通用户连接的公共控制套接字。普通 `ninitctl` 客户端通道属于另一套权限边界，不应复用为 PID1—Manager 私有通道。
 
