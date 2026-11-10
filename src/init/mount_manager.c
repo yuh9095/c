@@ -134,19 +134,48 @@ static int
 check_mountpoint_directory(const char *root, const char *path)
 {
     char full[4096];
+    char prefix[4096];
+    char *cursor;
     struct stat st;
+    size_t length;
 
     if (make_path(full, sizeof(full), root, path) < 0)
         return -1;
-    if (lstat(full, &st) < 0)
+    length = strlen(full);
+    if (length == 0 || full[0] != '/') {
+        errno = EINVAL;
         return -1;
-    if (S_ISLNK(st.st_mode)) {
-        errno = ELOOP;
-        return 0;
     }
-    if (!S_ISDIR(st.st_mode)) {
-        errno = ENOTDIR;
-        return 0;
+    if (length >= sizeof(prefix)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    memcpy(prefix, full, length + 1);
+
+    /*
+     * Inspect every path component, not just the final mountpoint. This
+     * rejects symlinked roots and parent directories before mount(2).
+     */
+    for (cursor = prefix + 1; ; cursor++) {
+        if (*cursor != '/' && *cursor != '\0')
+            continue;
+        {
+            char saved = *cursor;
+            *cursor = '\0';
+            if (lstat(prefix, &st) < 0)
+                return -1;
+            *cursor = saved;
+            if (S_ISLNK(st.st_mode)) {
+                errno = ELOOP;
+                return 0;
+            }
+            if (!S_ISDIR(st.st_mode)) {
+                errno = ENOTDIR;
+                return 0;
+            }
+        }
+        if (*cursor == '\0')
+            break;
     }
     return 1;
 }
