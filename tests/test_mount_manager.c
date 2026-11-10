@@ -100,7 +100,7 @@ main(void)
     assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
     assert(plan.entries[1].action == NINIT_MOUNT_APPLY);
     assert(plan.entries[2].action == NINIT_MOUNT_APPLY);
-    assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == 0);
+    assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == 0);
     assert(state.calls == 2);
     assert(strcmp(state.last_target, "/tmp") != 0);
 
@@ -109,7 +109,7 @@ main(void)
         size_t saved_count = plan.count;
         plan.count = 2;
         errno = 0;
-        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
         assert(errno == EINVAL);
         assert(state.calls == 2);
         plan.count = saved_count;
@@ -125,7 +125,7 @@ main(void)
         assert(unlink(path) == 0);
         assert(symlink(other, path) == 0);
         errno = 0;
-        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
         assert(errno == EPERM);
         assert(state.calls == 2);
         assert(unlink(path) == 0);
@@ -166,7 +166,7 @@ main(void)
         mkdir_path(outside);
         assert(symlink(outside, path) == 0);
         errno = 0;
-        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
         assert(errno == ELOOP);
         assert(state.calls == 2);
         assert(unlink(path) == 0);
@@ -189,7 +189,7 @@ main(void)
         assert(rename(path, real_sys) == 0);
         write_file(path, "not a directory");
         errno = 0;
-        assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+        assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
         assert(errno == ENOTDIR);
         assert(state.calls == 2);
         assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
@@ -297,7 +297,7 @@ main(void)
         "1 0 0:1 / / ro - ext4 /dev/root ro\n"
         "10 1 0:2 / /proc rw - proc proc rw\n");
     errno = 0;
-    assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+    assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
     assert(errno == EPERM);
     assert(state.calls == 2);
 
@@ -316,7 +316,7 @@ main(void)
         "10 1 0:2 / /proc rw - proc proc rw\n"
         "11 1 0:3 / /sys rw - tmpfs tmpfs rw\n");
     errno = 0;
-    assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+    assert(ninit_mount_manager_apply(root, &policy, &plan, record_mount, &state) == -1);
     assert(errno == EBUSY);
     assert(state.calls == 2);
 
