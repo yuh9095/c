@@ -193,8 +193,9 @@ approach used by systemd's `detect_container()` and OpenRC's
 - `/run/host/container-manager` is preferred because it is readable without
   privileged access;
 - for PID 1, the inherited `container` variable is authoritative when set
-  (an empty value means no container); non-PID-1 processes instead consult
-  `/run/systemd/container`;
+  (an empty value means no container); non-PID-1 processes consult
+  `/run/systemd/container` and then best-effort read PID 1's `container`
+  variable from `/proc/1/environ`;
 - `/run/.containerenv` and `/.dockerenv` are checked last, in that order, so
   generic image markers do not override a more specific manager hint;
 - an `oci` hint is not treated as a runtime: Ninit checks the Podman/Docker
