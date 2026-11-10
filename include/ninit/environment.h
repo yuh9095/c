@@ -85,6 +85,26 @@ const char *ninit_container_type_name(enum ninit_container_type type);
  * decisions, not proof that a syscall will succeed; callers must still handle
  * EPERM/EBUSY and preserve existing mounts.
  */
+/*
+ * Read-only snapshot of the current process' mount namespace and effective
+ * Linux capabilities. A zero field means either absent or not observable;
+ * the corresponding *_available field distinguishes those cases.
+ */
+struct ninit_environment_capabilities {
+    int mountinfo_available;
+    int status_available;
+    int proc_mounted;
+    int sys_mounted;
+    int devtmpfs_mounted;
+    int cgroup_mounted;
+    int cap_sys_admin;
+    int cap_sys_boot;
+};
+
+int ninit_environment_probe_capabilities(
+    const char *root,
+    struct ninit_environment_capabilities *capabilities);
+
 struct ninit_environment_policy {
     int allow_host_shutdown;
     int allow_mount_proc;
