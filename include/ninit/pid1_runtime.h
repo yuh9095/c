@@ -58,6 +58,20 @@ int ninit_pid1_event_source_drain(
     ninit_pid1_signal_callback callback,
     void *userdata);
 
+/*
+ * Wait for signals, dispatch them, and reap all exited children. timeout_ms
+ * follows poll(): -1 waits indefinitely, 0 polls, positive values are ms.
+ * Returns the number of signal records plus children reaped, or -1 on error.
+ * This is a single event-loop iteration, not a complete PID 1 main loop.
+ */
+int ninit_pid1_event_source_wait(
+    struct ninit_pid1_event_source *source,
+    int timeout_ms,
+    ninit_pid1_signal_callback signal_callback,
+    void *signal_userdata,
+    ninit_child_exit_callback child_callback,
+    void *child_userdata);
+
 /* Restore previous signal actions and close the self-pipe. */
 void ninit_pid1_event_source_destroy(
     struct ninit_pid1_event_source *source);
