@@ -47,7 +47,7 @@ target_include_directories(ninit-manager-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 target_compile_options(ninit-manager-core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(ninit-manager src/manager/main.c)
-target_link_libraries(ninit-manager PRIVATE ninit-common)
+target_link_libraries(ninit-manager PRIVATE ninit-common ninit-manager-core)
 target_compile_options(ninit-manager PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(ninitctl src/ctl/main.c)
