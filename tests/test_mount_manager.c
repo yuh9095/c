@@ -181,6 +181,22 @@ main(void)
         assert(observed.root_mount_read_only == 0);
     }
 
+    /* Existing pseudo-filesystem VFS hardening is reported, not rewritten. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+        "10 1 0:2 / /proc rw,nosuid,nodev,noexec - proc proc rw\n"
+        "11 1 0:3 / /sys rw,nosuid,nodev - sysfs sysfs rw\n"
+        "12 1 0:4 / /dev rw,nosuid - devtmpfs devtmpfs rw\n");
+    assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+    assert(plan.entries[0].action == NINIT_MOUNT_SKIP);
+    assert(plan.entries[0].existing_mount_options ==
+           (NINIT_MOUNT_OPTION_NOSUID | NINIT_MOUNT_OPTION_NODEV |
+            NINIT_MOUNT_OPTION_NOEXEC));
+    assert(plan.entries[1].existing_mount_options ==
+           (NINIT_MOUNT_OPTION_NOSUID | NINIT_MOUNT_OPTION_NODEV));
+    assert(plan.entries[2].existing_mount_options == NINIT_MOUNT_OPTION_NOSUID);
+
     /* Shared root propagation must block missing mount targets. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path,
