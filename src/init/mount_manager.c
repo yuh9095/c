@@ -228,7 +228,8 @@ ninit_mount_manager_apply(const char *root,
         }
         if (ninit_environment_probe_capabilities(root, &caps) < 0 ||
             !caps.mountinfo_available || !caps.status_available ||
-            !caps.cap_sys_admin) {
+            !caps.cap_sys_admin || !caps.mount_namespace_available ||
+            !caps.mount_namespace_matches_pid1) {
             errno = EPERM;
             return -1;
         }
