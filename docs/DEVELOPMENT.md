@@ -298,6 +298,6 @@ PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动
 
 Mount Manager 的路径构造器要求 root 和目标均为绝对路径，并拒绝 `.`、`..` 路径组件；root 末尾的多余斜杠会被规范化。路径解析从 `/` 开始逐级使用 `openat(O_PATH|O_NOFOLLOW)` followed by `fstat()`，每一级都相对于已打开的父目录解析并必须是实际目录。规划阶段会将符号链接和非目录组件标记为 conflict；apply 阶段则直接失败并保留 `ELOOP`/`ENOTDIR`。生产挂载会保留最终目标目录 FD，并通过 `move_mount(..., MOVE_MOUNT_F_EMPTY_PATH)` 安装 detached mount，避免在检查后重新解析目标路径字符串。
 
-能力快照还从根挂载记录的 mount options 字段读取 `ro`/`rw`，报告 `root_mount_read_only`。该字段目前仅用于准确描述根挂载状态，不会因为 root 为只读就一概阻止挂载：Linux 可以在只读根文件系统中挂载到预先存在的目录，最终仍由 namespace、权限和 mount syscall 决定是否成功。
+能力快照还从根挂载记录的 mount options 字段读取 `ro`/`rw`，报告 `root_mount_read_only`。若根挂载为只读，规划阶段会将缺失的伪文件系统目标标记为 `blocked`；apply 阶段也会重新探测并拒绝过期计划。已经存在且类型正确的挂载仍标记为 `skip`，不会因为根挂载只读而尝试覆盖或重挂载。
 
 Mount Manager 还会从 mountinfo 检查根挂载点 `/` 的传播属性。若找不到根挂载记录，或根挂载带有 `shared:` propagation tag，则缺失的伪文件系统挂载目标会被标记为 `blocked`；apply 阶段也会重新检查。原因是直接在 shared mount tree 下创建挂载可能向 peer namespace 传播。Ninit 当前不会擅自把整个根挂载树改成 private，也不会在未审查传播语义前自动改变系统挂载拓扑。
