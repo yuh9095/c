@@ -163,6 +163,19 @@ main(void)
     assert(environment.container == NINIT_CONTAINER_DOCKER);
     unlink(path);
 
+    /* An empty PID-1 container= value is authoritative: ignore image markers. */
+    snprintf(path, sizeof(path), "%s/.dockerenv", root);
+    make_file(path, "");
+    options.is_pid1 = 1;
+    options.container_environment = "";
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    options.container_environment = NULL;
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.container == NINIT_CONTAINER_DOCKER);
+    unlink(path);
+    options.is_pid1 = 0;
+
     /* Reset the cgroup fixture before testing PID namespace evidence. */
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
     make_file(path, "0::/\n");
