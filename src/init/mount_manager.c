@@ -200,17 +200,29 @@ check_mountpoint_directory(const char *root, const char *path)
 
     component = strtok_r(full + 1, "/", &save);
     while (component != NULL) {
+        struct stat st;
+
         next_fd = openat(directory_fd, component,
-                         O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+                         O_PATH | O_NOFOLLOW | O_CLOEXEC);
         if (next_fd < 0) {
             int saved_errno = errno;
             close(directory_fd);
-            if (saved_errno == ELOOP || saved_errno == ENOTDIR) {
-                errno = saved_errno == ELOOP ? ELOOP : ENOTDIR;
-                return 0;
-            }
             errno = saved_errno;
             return -1;
+        }
+        if (fstat(next_fd, &st) < 0) {
+            int saved_errno = errno;
+            close(next_fd);
+            close(directory_fd);
+            errno = saved_errno;
+            return -1;
+        }
+        if (S_ISLNK(st.st_mode) || !S_ISDIR(st.st_mode)) {
+            int saved_errno = S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+            close(next_fd);
+            close(directory_fd);
+            errno = saved_errno;
+            return 0;
         }
         close(directory_fd);
         directory_fd = next_fd;
