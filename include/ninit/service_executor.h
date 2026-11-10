@@ -26,6 +26,12 @@ int ninit_service_executor_spawn(const struct ninit_unit *unit,
                                  pid_t *pid,
                                  int *exec_error_fd);
 
+/* Spawn an argv command with the same asynchronous exec-error handshake. */
+int ninit_service_executor_spawn_argv(const char *const *argv,
+                                      size_t argc,
+                                      pid_t *pid,
+                                      int *exec_error_fd);
+
 /*
  * Check the exec handshake.
  * Returns 0 while pending, 1 when exec succeeded, or -1 when exec failed
