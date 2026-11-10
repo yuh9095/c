@@ -164,6 +164,10 @@ ninit_job_manager_complete(struct ninit_job_manager *manager, uint64_t id,
         job->error_code = error_code != 0 ? error_code : EIO;
         skip_pending(job);
     }
+    if (job->state == NINIT_JOB_RUNNING && job->completed == job->count &&
+        job->running == 0) {
+        job->state = NINIT_JOB_SUCCEEDED;
+    }
     return 0;
 }
 
