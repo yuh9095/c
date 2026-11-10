@@ -90,6 +90,8 @@ main(void)
     caps.cap_sys_admin = 1;
     caps.mount_namespace_available = 1;
     caps.mount_namespace_matches_pid1 = 1;
+    caps.root_mount_found = 1;
+    caps.root_mount_shared = 0;
 
     assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
     assert(plan.count == 3);
