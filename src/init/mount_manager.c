@@ -170,7 +170,8 @@ ninit_mount_manager_plan(const char *root,
                                          policy->allow_mount_devtmpfs;
         if (!allowed || !caps->status_available || !caps->cap_sys_admin ||
             !caps->mount_namespace_available ||
-            !caps->mount_namespace_matches_pid1) {
+            !caps->mount_namespace_matches_pid1 ||
+            !caps->root_mount_found || caps->root_mount_shared) {
             entry->action = NINIT_MOUNT_BLOCKED;
             continue;
         }
@@ -231,7 +232,8 @@ ninit_mount_manager_apply(const char *root,
         if (ninit_environment_probe_capabilities(root, &caps) < 0 ||
             !caps.mountinfo_available || !caps.status_available ||
             !caps.cap_sys_admin || !caps.mount_namespace_available ||
-            !caps.mount_namespace_matches_pid1) {
+            !caps.mount_namespace_matches_pid1 || !caps.root_mount_found ||
+            caps.root_mount_shared) {
             errno = EPERM;
             return -1;
         }
