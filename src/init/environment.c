@@ -316,6 +316,8 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     if (read_first_line(root, "/run/systemd/container",
                         value, sizeof(value)) == 0 && value[0] != '\0') {
         type = container_from_name(value);
+        if (type == NINIT_CONTAINER_OCI)
+            type = NINIT_CONTAINER_OTHER;
         environment->kind = NINIT_ENVIRONMENT_CONTAINER;
         environment->container = type == NINIT_CONTAINER_NONE ?
                                  NINIT_CONTAINER_OTHER : type;
@@ -328,6 +330,8 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         if (container_env[0] == '\0')
             return 0;
         type = container_from_name(container_env);
+        if (type == NINIT_CONTAINER_OCI)
+            type = NINIT_CONTAINER_OTHER;
         environment->kind = NINIT_ENVIRONMENT_CONTAINER;
         environment->container = type == NINIT_CONTAINER_NONE ?
                                  NINIT_CONTAINER_OTHER : type;
