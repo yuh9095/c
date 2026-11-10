@@ -159,6 +159,47 @@ read_first_line(const char *root, const char *path,
     return 0;
 }
 
+static int
+detect_proot_tracer(const char *root)
+{
+    char full[4096];
+    char *line = NULL;
+    size_t capacity = 0;
+    FILE *file;
+    long tracer = 0;
+    int found = 0;
+    char comm_path[4096];
+    char comm[256];
+
+    if (make_path(full, sizeof(full), root, "/proc/self/status") < 0)
+        return 0;
+    file = fopen(full, "r");
+    if (file == NULL)
+        return 0;
+    while (getline(&line, &capacity, file) >= 0) {
+        if (strncmp(line, "TracerPid:", 10) == 0) {
+            char *value = trim_space(line + 10);
+            char *end = NULL;
+            errno = 0;
+            tracer = strtol(value, &end, 10);
+            found = errno == 0 && end != value && *trim_space(end) == '\\0' &&
+                    tracer > 0 && tracer <= 2147483647L;
+            break;
+        }
+    }
+    free(line);
+    fclose(file);
+    if (!found)
+        return 0;
+
+    if (snprintf(comm_path, sizeof(comm_path), "%s/proc/%ld/comm",
+                 root != NULL ? root : "", tracer) >= (int) sizeof(comm_path))
+        return 0;
+    if (read_first_line("/", comm_path, comm, sizeof(comm)) < 0)
+        return 0;
+    return strncmp(comm, "proot", 5) == 0;
+}
+
 static enum ninit_container_type
 container_from_name(const char *name)
 {
@@ -293,6 +334,15 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;
         return 0;
     }
+
+    /* Proot uses ptrace instead of PID namespaces. */
+    if (detect_proot_tracer(root)) {
+        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+        environment->container = NINIT_CONTAINER_PROOT;
+        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
+        return 0;
+    }
+
 
     /* Container managers may publish an unprivileged identification file. */
     if (read_first_line(root, "/run/host/container-manager",
