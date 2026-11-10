@@ -136,6 +136,35 @@ ninit_container_type_name(enum ninit_container_type type)
     return "unknown";
 }
 
+static int
+apply_environment_override(const char *override,
+                           struct ninit_environment *environment)
+{
+    enum ninit_container_type type;
+
+    if (override == NULL || override[0] == '\\0' ||
+        strcmp(override, "auto") == 0)
+        return 0;
+
+    if (strcmp(override, "host") == 0 || strcmp(override, "none") == 0) {
+        environment->kind = NINIT_ENVIRONMENT_HOST;
+        environment->container = NINIT_CONTAINER_NONE;
+    } else {
+        if (strncmp(override, "container:", 10) == 0)
+            override += 10;
+        else if (strcmp(override, "container") == 0)
+            override = "other";
+
+        type = container_from_name(override);
+        if (type == NINIT_CONTAINER_NONE)
+            return -1;
+        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+        environment->container = type;
+    }
+    environment->evidence = NINIT_ENV_EVIDENCE_OVERRIDE;
+    return 1;
+}
+
 int
 ninit_environment_detect(const struct ninit_environment_options *options,
                          struct ninit_environment *environment)
