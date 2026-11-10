@@ -116,27 +116,3 @@ ninit_manager_disconnect(struct ninit_manager_process *process)
     }
 }
 
-int
-ninit_manager_reap(struct ninit_manager_process *process, int *status)
-{
-    pid_t result;
-
-    if (process == NULL || process->pid <= 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    do {
-        result = waitpid(process->pid, status, WNOHANG);
-    } while (result < 0 && errno == EINTR);
-
-    if (result == 0) {
-        return 0;
-    }
-    if (result < 0) {
-        return -1;
-    }
-
-    process->pid = -1;
-    return 1;
-}
