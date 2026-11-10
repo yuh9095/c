@@ -34,6 +34,9 @@ int ninit_job_manager_submit_stop(struct ninit_job_manager *manager,
     const struct ninit_dependency_plan *plan, size_t max_parallel,
     uint64_t *job_id);
 /* Returns 1 with a Unit to dispatch, 0 when currently no work is dispatchable, -1 on error. */
+/* Return 1 for a Stop transaction, 0 for Start, or -1 on error. */
+int ninit_job_manager_is_stop(const struct ninit_job_manager *manager,
+    uint64_t job_id);
 int ninit_job_manager_dispatch(struct ninit_job_manager *manager, uint64_t job_id,
     const struct ninit_unit **unit, size_t *plan_index);
 /* Complete exactly one previously dispatched plan index. */
