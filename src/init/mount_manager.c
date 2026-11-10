@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <sys/syscall.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
@@ -182,8 +184,12 @@ find_mount(const char *root, const char *path, char *filesystem,
  * The returned descriptor is closed before mount(2), so this is not yet a
  * race-free mountpoint binding.
  */
+/*
+ * Resolve every component relative to an open parent directory. The returned
+ * descriptor remains bound to the final directory for fd-based mount APIs.
+ */
 static int
-check_mountpoint_directory(const char *root, const char *path)
+open_mountpoint_directory(const char *root, const char *path)
 {
     char full[4096];
     char *save = NULL;
@@ -222,23 +228,120 @@ check_mountpoint_directory(const char *root, const char *path)
             close(next_fd);
             close(directory_fd);
             errno = saved_errno;
-            return 0;
+            return -1;
         }
         close(directory_fd);
         directory_fd = next_fd;
         component = strtok_r(NULL, "/", &save);
     }
 
-    close(directory_fd);
+    return directory_fd;
+}
+
+static int
+check_mountpoint_directory(const char *root, const char *path)
+{
+    int fd = open_mountpoint_directory(root, path);
+    if (fd < 0) {
+        if (errno == ELOOP || errno == ENOTDIR)
+            return 0;
+        return -1;
+    }
+    close(fd);
     return 1;
 }
 
 static int
-default_mount(const char *source, const char *target, const char *filesystem,
-              unsigned long flags, const char *data, void *userdata)
+mount_with_fd_api(const struct ninit_mount_entry *entry, int target_fd)
 {
-    (void) userdata;
-    return mount(source, target, filesystem, flags, data);
+#if defined(SYS_fsopen) && defined(SYS_fsconfig) && defined(SYS_fsmount) && \
+    defined(SYS_move_mount) && defined(SYS_mount_setattr)
+    struct ninit_mount_attr {
+        uint64_t attr_set;
+        uint64_t attr_clr;
+        uint64_t propagation;
+        uint64_t userns_fd;
+    } attr;
+    int fs_fd = -1;
+    int mount_fd = -1;
+    int result = -1;
+    int saved_errno;
+
+#ifndef FSOPEN_CLOEXEC
+#define FSOPEN_CLOEXEC 0x00000001
+#endif
+#ifndef FSCONFIG_SET_STRING
+#define FSCONFIG_SET_STRING 1
+#endif
+#ifndef FSCONFIG_CMD_CREATE
+#define FSCONFIG_CMD_CREATE 6
+#endif
+#ifndef FSMOUNT_CLOEXEC
+#define FSMOUNT_CLOEXEC 0x00000001
+#endif
+#ifndef MOVE_MOUNT_F_EMPTY_PATH
+#define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
+#endif
+#ifndef MOUNT_ATTR_NOSUID
+#define MOUNT_ATTR_NOSUID 0x00000002
+#endif
+#ifndef MOUNT_ATTR_NODEV
+#define MOUNT_ATTR_NODEV 0x00000004
+#endif
+#ifndef MOUNT_ATTR_NOEXEC
+#define MOUNT_ATTR_NOEXEC 0x00000008
+#endif
+#ifndef AT_EMPTY_PATH
+#define AT_EMPTY_PATH 0x1000
+#endif
+
+    fs_fd = (int) syscall(SYS_fsopen, entry->filesystem, FSOPEN_CLOEXEC);
+    if (fs_fd < 0)
+        goto out;
+
+    if (entry->data != NULL &&
+        syscall(SYS_fsconfig, fs_fd, FSCONFIG_SET_STRING,
+                "mode", "0755", 0) < 0)
+        goto out;
+
+    if (syscall(SYS_fsconfig, fs_fd, FSCONFIG_CMD_CREATE,
+                NULL, NULL, 0) < 0)
+        goto out;
+
+    mount_fd = (int) syscall(SYS_fsmount, fs_fd, FSMOUNT_CLOEXEC, 0);
+    if (mount_fd < 0)
+        goto out;
+
+    memset(&attr, 0, sizeof(attr));
+    if ((entry->flags & MS_NOSUID) != 0)
+        attr.attr_set |= MOUNT_ATTR_NOSUID;
+    if ((entry->flags & MS_NODEV) != 0)
+        attr.attr_set |= MOUNT_ATTR_NODEV;
+    if ((entry->flags & MS_NOEXEC) != 0)
+        attr.attr_set |= MOUNT_ATTR_NOEXEC;
+    if (syscall(SYS_mount_setattr, mount_fd, "", AT_EMPTY_PATH,
+                &attr, sizeof(attr)) < 0)
+        goto out;
+
+    if (syscall(SYS_move_mount, mount_fd, "", target_fd, "",
+                MOVE_MOUNT_F_EMPTY_PATH) < 0)
+        goto out;
+
+    result = 0;
+out:
+    saved_errno = errno;
+    if (mount_fd >= 0)
+        close(mount_fd);
+    if (fs_fd >= 0)
+        close(fs_fd);
+    errno = saved_errno;
+    return result;
+#else
+    (void) entry;
+    (void) target_fd;
+    errno = EOPNOTSUPP;
+    return -1;
+#endif
 }
 
 static const struct ninit_mount_entry templates[NINIT_MOUNT_PLAN_COUNT] = {
