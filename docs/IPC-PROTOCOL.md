@@ -55,3 +55,22 @@ Request ID 用于关联请求和响应。零值可保留给非请求型事件；
 ## 当前实现范围
 
 `include/ninit/ipc_protocol.h` 与 `src/common/ipc_protocol.c` 实现版本 1 的帧编码/解码和基本校验；`include/ninit/ipc_channel.h` 与 `src/common/ipc_channel.c` 实现本地 SOCK_SEQPACKET socketpair 通道及单帧发送/接收。当前仍没有握手状态机、对端身份策略、重连、Manager 监督或 PID 1 实现。
+
+## HELLO 握手 Payload（版本 1）
+
+Manager 首先发送 HELLO，Request ID 必须为 0，Payload 固定 8 字节：
+
+| 偏移 | 长度 | 字段 | 当前值 |
+|---:|---:|---|---|
+| 0 | 2 | 最低协议版本 | 1 |
+| 2 | 2 | 最高协议版本 | 1 |
+| 4 | 2 | 角色 | 1（Manager） |
+| 6 | 2 | 保留 | 0 |
+
+PID 1 当前只接受最低/最高版本均为 1 的 Manager 握手，并返回 HELLO_REPLY。响应 Payload 固定 4 字节：选定版本（2 字节，值 1）和保留字段（2 字节，值 0）。协议版本也必须与帧头中的 Version 一致。
+
+握手超时由双方分别执行，当前默认 3000 毫秒。此握手确认私有通道两端使用兼容协议并识别 Manager 角色；由于通道由 PID 1 创建并通过 posix_spawn 文件动作交接，它不是通用 socket 服务，也不提供针对恶意同 UID 进程的密码学认证。
+
+## Manager 进程交接
+
+PID 1 侧的 ninit_manager_start() 创建 socketpair，将子进程端点交接到 fd 3，再执行 ninit-manager --ipc-fd 3。父进程保留另一端，只有握手成功后才把 Manager PID 和 IPC fd 返回调用者。握手失败时启动器终止并回收子进程。ninit_manager_disconnect() 关闭父端通道；Manager 收到关闭事件后退出。PID 1 必须继续负责 SIGCHLD 处理和子进程回收，不能把它交给 Manager。
