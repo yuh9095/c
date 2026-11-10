@@ -17,7 +17,7 @@ extern "C" {
  *
  * EOF means exec succeeded (the child closed the pipe during exec).
  * A child-reported errno means exec failed. This API never waits for or
- * reaps children; PID 1 must reap them through its centralized reaper.
+ * reaps children; the process that spawned them must reap them through its child reaper.
  *
  * Target Units have no process to start and are rejected with EINVAL; their
  * successful handling belongs to the job dispatcher.
