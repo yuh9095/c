@@ -3,6 +3,7 @@
 #include <ninit/unit_file.h>
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -384,5 +385,101 @@ done:
     free(name);
     free_data(&data);
     (void) line_number;
+    return result;
+}
+
+static int
+compare_names(const void *left, const void *right)
+{
+    const char *const *a = left;
+    const char *const *b = right;
+    return strcmp(*a, *b);
+}
+
+int
+ninit_unit_file_load_directory(struct ninit_unit_manager *manager,
+                               const char *directory)
+{
+    DIR *dir;
+    struct dirent *entry;
+    char **names = NULL;
+    size_t count = 0;
+    size_t i;
+    int result = -1;
+    int saved_errno = 0;
+    size_t directory_length;
+
+    if (manager == NULL || directory == NULL || directory[0] == '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    dir = opendir(directory);
+    if (dir == NULL)
+        return -1;
+    directory_length = strlen(directory);
+
+    errno = 0;
+    while ((entry = readdir(dir)) != NULL) {
+        size_t name_length = strlen(entry->d_name);
+        char *copy;
+        char **items;
+
+        if (name_length <= 8 ||
+            (strcmp(entry->d_name + name_length - 8, ".service") != 0 &&
+             strcmp(entry->d_name + name_length - 7, ".target") != 0))
+            continue;
+        copy = strdup(entry->d_name);
+        if (copy == NULL)
+            goto done;
+        items = realloc(names, (count + 1) * sizeof(*items));
+        if (items == NULL) {
+            free(copy);
+            goto done;
+        }
+        names = items;
+        names[count++] = copy;
+    }
+    if (errno != 0)
+        goto done;
+
+    qsort(names, count, sizeof(*names), compare_names);
+    for (i = 0; i < count; ++i) {
+        size_t name_length = strlen(names[i]);
+        size_t separator = directory_length > 0 &&
+                           directory[directory_length - 1] == '/' ? 0 : 1;
+        char *path;
+        int load_result;
+
+        if (directory_length > (size_t) -1 - name_length - separator - 1) {
+            errno = EOVERFLOW;
+            goto done;
+        }
+        path = malloc(directory_length + separator + name_length + 1);
+        if (path == NULL)
+            goto done;
+        memcpy(path, directory, directory_length);
+        if (separator != 0)
+            path[directory_length] = '/';
+        memcpy(path + directory_length + separator, names[i],
+               name_length + 1);
+        load_result = ninit_unit_file_load(manager, path);
+        saved_errno = errno;
+        free(path);
+        if (load_result < 0) {
+            errno = saved_errno;
+            goto done;
+        }
+    }
+    result = 0;
+
+done:
+    if (result < 0 && errno == 0)
+        errno = EIO;
+    saved_errno = errno;
+    for (i = 0; i < count; ++i)
+        free(names[i]);
+    free(names);
+    closedir(dir);
+    errno = saved_errno;
     return result;
 }
