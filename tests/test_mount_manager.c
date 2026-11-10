@@ -43,9 +43,41 @@ write_file(const char *path, const char *contents)
     fclose(file);
 }
 
+static void
+test_mount_error_classification(void)
+{
+    assert(ninit_mount_manager_classify_error(EPERM) ==
+           NINIT_MOUNT_ERROR_PERMISSION);
+    assert(ninit_mount_manager_classify_error(EACCES) ==
+           NINIT_MOUNT_ERROR_PERMISSION);
+    assert(ninit_mount_manager_classify_error(EOPNOTSUPP) ==
+           NINIT_MOUNT_ERROR_UNSUPPORTED);
+    assert(ninit_mount_manager_classify_error(ENOSYS) ==
+           NINIT_MOUNT_ERROR_UNSUPPORTED);
+    assert(ninit_mount_manager_classify_error(EROFS) ==
+           NINIT_MOUNT_ERROR_READ_ONLY);
+    assert(ninit_mount_manager_classify_error(ENOENT) ==
+           NINIT_MOUNT_ERROR_TARGET);
+    assert(ninit_mount_manager_classify_error(ELOOP) ==
+           NINIT_MOUNT_ERROR_TARGET);
+    assert(ninit_mount_manager_classify_error(EBUSY) ==
+           NINIT_MOUNT_ERROR_CONFLICT);
+    assert(ninit_mount_manager_classify_error(EALREADY) ==
+           NINIT_MOUNT_ERROR_CONFLICT);
+    assert(ninit_mount_manager_classify_error(EINVAL) ==
+           NINIT_MOUNT_ERROR_INVALID);
+    assert(ninit_mount_manager_classify_error(EIO) ==
+           NINIT_MOUNT_ERROR_IO);
+    assert(strcmp(ninit_mount_error_class_name(
+                      NINIT_MOUNT_ERROR_UNSUPPORTED),
+                  "kernel-api-unsupported") == 0);
+}
+
 int
 main(void)
 {
+    test_mount_error_classification();
+
     char root[] = "/tmp/ninit-mount-XXXXXX";
     char path[512];
     char root_alias[512];
