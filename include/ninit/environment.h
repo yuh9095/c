@@ -1,6 +1,8 @@
 #ifndef NINIT_ENVIRONMENT_H
 #define NINIT_ENVIRONMENT_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -58,6 +60,16 @@ struct ninit_environment_options {
 int ninit_environment_detect(
     const struct ninit_environment_options *options,
     struct ninit_environment *environment);
+
+
+/*
+ * Read /etc/ninit/environment.conf beneath root. The file accepts one
+ * Environment=VALUE assignment; a missing file selects "auto".
+ * Returns 0 on success or -1 with errno on malformed/unreadable input.
+ */
+int ninit_environment_load_override(const char *root,
+                                    char *buffer,
+                                    size_t buffer_size);
 
 const char *ninit_container_type_name(enum ninit_container_type type);
 
