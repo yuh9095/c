@@ -2,6 +2,7 @@
 #define NINIT_ENVIRONMENT_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,6 +98,9 @@ struct ninit_environment_capabilities {
     int sys_mounted;
     int devtmpfs_mounted;
     int cgroup_mounted;
+    int mount_namespace_available;
+    int mount_namespace_matches_pid1;
+    uint64_t mount_namespace_inode;
     int cap_sys_admin;
     int cap_sys_boot;
 };
