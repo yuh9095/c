@@ -70,3 +70,19 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 4. `ninit_boot_coordinator_shutdown()` 阻止继续推进启动序列。
 
 当前模块只定义协调接口和状态转换，submit 回调仍需由未来 Job Manager 实现；它不解析 Unit、不执行服务，也不代表系统已经具备可启动能力。
+
+
+## Native Unit Manager
+
+当前第一版 Unit Manager 提供内存中的原生 Unit 注册表，不负责解析配置文件或启动进程。
+
+- 支持 `service` 与 `target` 两种 Unit 类型。
+- 每个 Unit 有唯一名称，可选 description 和 ExecStart。
+- Unit 可声明 Requires、Wants、After、Before 名称列表。
+- 注册时深拷贝定义及依赖名称；调用者可在 add 返回后释放输入缓冲区。
+- 重复名称返回 `EEXIST`，非法名称/定义返回 `EINVAL`。
+- 查找返回 manager 所有的只读借用指针，生命周期截止于 manager 销毁。
+
+名称目前限制为最多 255 个 ASCII 字母数字字符以及 `_`、`-`、`.`、`@`、`:`。依赖名称在注册时只做语法检查；是否存在、是否形成循环以及实际启动顺序由后续 Dependency Engine 负责。
+
+该模块是数据模型和注册表，不是完整服务管理器。配置文件解析、Unit 状态、Job 调度、进程监督和 systemd/OpenRC 兼容均未实现。
