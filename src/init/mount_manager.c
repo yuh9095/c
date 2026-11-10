@@ -351,7 +351,7 @@ ninit_mount_manager_apply(const char *root,
             if (directory < 0)
                 return -1;
             if (directory == 0) {
-                errno = ELOOP;
+                /* Preserve ELOOP versus ENOTDIR from the fd-relative walk. */
                 return -1;
             }
         }
