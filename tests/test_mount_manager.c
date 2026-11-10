@@ -57,6 +57,19 @@ main(void)
     assert(mkdtemp(root) != NULL);
     snprintf(path, sizeof(path), "%s/proc", root); mkdir_path(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); mkdir_path(path);
+    snprintf(path, sizeof(path), "%s/proc/1", root); mkdir_path(path);
+    snprintf(path, sizeof(path), "%s/proc/self/ns", root); mkdir_path(path);
+    snprintf(path, sizeof(path), "%s/proc/1/ns", root); mkdir_path(path);
+    snprintf(path, sizeof(path), "%s/proc/ns-mnt", root);
+    write_file(path, "same mount namespace");
+    {
+        char target[512];
+        snprintf(target, sizeof(target), "%s/proc/ns-mnt", root);
+        snprintf(path, sizeof(path), "%s/proc/self/ns/mnt", root);
+        assert(symlink(target, path) == 0);
+        snprintf(path, sizeof(path), "%s/proc/1/ns/mnt", root);
+        assert(symlink(target, path) == 0);
+    }
     snprintf(path, sizeof(path), "%s/sys", root); mkdir_path(path);
     snprintf(path, sizeof(path), "%s/dev", root); mkdir_path(path);
 
@@ -73,6 +86,8 @@ main(void)
     caps.mountinfo_available = 1;
     caps.status_available = 1;
     caps.cap_sys_admin = 1;
+    caps.mount_namespace_available = 1;
+    caps.mount_namespace_matches_pid1 = 1;
 
     assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
     assert(plan.count == 3);
@@ -117,7 +132,13 @@ main(void)
 
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self/status", root); unlink(path);
+    snprintf(path, sizeof(path), "%s/proc/self/ns/mnt", root); unlink(path);
+    snprintf(path, sizeof(path), "%s/proc/1/ns/mnt", root); unlink(path);
+    snprintf(path, sizeof(path), "%s/proc/self/ns", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/1/ns", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/ns-mnt", root); unlink(path);
     snprintf(path, sizeof(path), "%s/proc/self", root); rmdir(path);
+    snprintf(path, sizeof(path), "%s/proc/1", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/proc", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/sys", root); rmdir(path);
     snprintf(path, sizeof(path), "%s/dev", root); rmdir(path);
