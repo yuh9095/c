@@ -97,7 +97,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
                 int check = ninit_service_runtime_check_exec(runtime, pids[i]);
                 if (check < 0 && errno != ECHILD)
                     fprintf(stderr,
-                            "ninit-manager: service %ld exec cleanup: %s\\n",
+                            "ninit-manager: service %ld exec cleanup: %s\n",
                             (long) pids[i], strerror(errno));
             }
         }
@@ -307,7 +307,7 @@ run_manager(int fd, const char *unit_dir, const char *target)
     }
 cleanup:
     if (stop_service_children(runtime, reaper) < 0)
-        fprintf(stderr, "ninit-manager: failed to stop service children: %s\\n",
+        fprintf(stderr, "ninit-manager: failed to stop service children: %s\n",
                 strerror(errno));
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
