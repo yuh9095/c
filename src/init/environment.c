@@ -227,7 +227,25 @@ ninit_environment_detect(const struct ninit_environment_options *options,
 
     proc_status = path_exists(root, "/proc/1/cgroup");
     if (proc_status > 0) {
+        struct stat pid_namespace;
+        char namespace_path[4096];
+
         environment->proc_available = 1;
+        /*
+         * Linux reserves inode 0xEFFFFFFC for the initial PID namespace.
+         * This mirrors systemd's final fallback for an otherwise unknown
+         * container, and is only consulted when this process is PID 1.
+         */
+        if (environment->is_pid1 &&
+            make_path(namespace_path, sizeof(namespace_path), root,
+                      "/proc/1/ns/pid") == 0 &&
+            stat(namespace_path, &pid_namespace) == 0 &&
+            (unsigned long long) pid_namespace.st_ino != 0xEFFFFFFCULL) {
+            environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+            environment->container = NINIT_CONTAINER_OTHER;
+            environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE;
+            return 0;
+        }
         environment->kind = NINIT_ENVIRONMENT_HOST;
     } else {
         proc_status = path_exists(root, "/proc/self/status");
