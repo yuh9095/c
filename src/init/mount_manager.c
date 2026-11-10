@@ -212,6 +212,16 @@ ninit_mount_manager_apply(const char *root,
 
         if (entry->action != NINIT_MOUNT_APPLY)
             continue;
+        if (i >= NINIT_MOUNT_PLAN_COUNT ||
+            entry->target != templates[i].target ||
+            entry->path == NULL || entry->filesystem == NULL ||
+            entry->source == NULL ||
+            strcmp(entry->path, templates[i].path) != 0 ||
+            strcmp(entry->filesystem, templates[i].filesystem) != 0 ||
+            strcmp(entry->source, templates[i].source) != 0) {
+            errno = EINVAL;
+            return -1;
+        }
         if (ninit_environment_probe_capabilities(root, &caps) < 0 ||
             !caps.mountinfo_available || !caps.status_available ||
             !caps.cap_sys_admin) {
