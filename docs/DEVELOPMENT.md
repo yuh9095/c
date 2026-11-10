@@ -192,12 +192,19 @@ approach used by systemd's `detect_container()` and OpenRC's
 - OpenVZ procfs indicators;
 - cgroup path indicators for Docker, Podman, Kubernetes, LXC and
   systemd-nspawn;
-- WSL indicators and, as a final PID-1 fallback, the Linux initial PID
-  namespace inode check.
+- WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_PARENT`
+  relationship probe. A visible parent proves the current PID namespace is
+  nested; `EPERM`/`ENOTTY` is inconclusive and remains UNKNOWN rather than
+  comparing against a kernel-internal inode constant.
 
 The result records the environment kind, recognized container family and
-evidence bits. Failure to inspect procfs is represented as UNKNOWN, not HOST.
-UNKNOWN and CONTAINER receive a restrictive policy: no host reboot, no
+evidence bits. Failure to inspect procfs or conclusively determine the PID
+namespace is represented as UNKNOWN, not HOST. `NS_GET_PARENT` can return
+`EPERM` both for the initial PID namespace and when its parent is outside the
+caller's namespace scope; Ninit treats this ambiguity conservatively. An
+administrator can explicitly select `Environment=host` (or
+`--environment host`) after verifying the boot environment. UNKNOWN and
+CONTAINER receive a restrictive policy: no host reboot, no
 host cgroup management, and no automatic replacement of proc/sys/dev mounts.
 HOST-like environments receive permission flags for later mount and shutdown
 stages; the flags are not proof that an operation is permitted, and every
