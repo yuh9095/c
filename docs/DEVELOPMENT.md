@@ -192,8 +192,9 @@ approach used by systemd's `detect_container()` and OpenRC's
 - OpenVZ procfs indicators;
 - cgroup path indicators for Docker, Podman, Kubernetes, LXC and
   systemd-nspawn;
-- WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_PARENT`
-  relationship probe. A visible parent proves the current PID namespace is
+- WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
+  verifies that the opened handle is a PID namespace; only then is namespace
+  evidence recorded. A visible parent proves the current PID namespace is
   nested; `EPERM`/`ENOTTY` is inconclusive and remains UNKNOWN rather than
   comparing against a kernel-internal inode constant.
 
