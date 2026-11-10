@@ -15,6 +15,12 @@ enum ninit_mount_action {
     NINIT_MOUNT_BLOCKED
 };
 
+enum ninit_mount_option {
+    NINIT_MOUNT_OPTION_NOSUID = 1U << 0,
+    NINIT_MOUNT_OPTION_NODEV  = 1U << 1,
+    NINIT_MOUNT_OPTION_NOEXEC = 1U << 2
+};
+
 enum ninit_mount_target {
     NINIT_MOUNT_PROC = 0,
     NINIT_MOUNT_SYS,
@@ -29,6 +35,8 @@ struct ninit_mount_entry {
     const char *source;
     const char *data;
     unsigned long flags;
+    /* Effective VFS security options on a pre-existing mount; zero if new. */
+    unsigned int existing_mount_options;
 };
 
 #define NINIT_MOUNT_PLAN_COUNT 3
