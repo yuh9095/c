@@ -158,3 +158,23 @@ ninit-manager --ipc-fd 3 --unit-dir /etc/ninit/units --target default.target
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
 运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。运行时销毁前，调用方必须先停止并回收所管理的子进程。`ninit_service_runtime_signal_all()` 可向所有已跟踪子进程发送信号，但不负责 waitpid；Manager 在退出清理阶段发送 SIGKILL，并继续通过 exec 握手 fd 与统一 child reaper 处理所有子进程，直到 Runtime 跟踪记录清空。当前尚未实现面向正常 Stop Job 的优雅停止、进程组、超时、重启策略、Unit 配置加载和 Job 提交。
+
+## PID 1 executable
+
+The `ninit-init` executable is the PID 1 entry point. It refuses to run
+outside PID 1, installs the OpenRC-style self-pipe signal event source, starts
+`ninit-manager`, and supervises that direct child. Its defaults are
+`/usr/bin/ninit-manager`, `/etc/ninit/units`, and `default.target`; these
+can be overridden with `--manager`, `--unit-dir`, and `--target`.
+
+PID 1 handles SIGTERM, SIGINT, and SIGPWR as shutdown requests. It closes the
+manager IPC channel and waits for the manager child to exit. SIGCHLD handling
+always uses the centralized nonblocking waitpid loop, then routes the reaped
+manager PID to the supervisor. PID 1 does not wait for or manage service
+grandchildren; the manager owns those processes and its own cleanup.
+
+Manager restart uses the supervisor's bounded exponential backoff. The PID 1
+poll timeout is derived from the next restart deadline so restarts do not
+require periodic busy polling. This is an initial operational entry point;
+console setup, mount setup, sysinit stages, reboot/poweroff syscall handling,
+and a complete shutdown policy remain future work.
