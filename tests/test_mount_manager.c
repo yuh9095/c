@@ -163,6 +163,20 @@ main(void)
         assert(rename(real_sys, path) == 0);
     }
 
+    /* A non-directory mountpoint is a conflict and keeps ENOTDIR on apply. */
+    {
+        char real_sys[512];
+        snprintf(real_sys, sizeof(real_sys), "%s/sys-dir", root);
+        snprintf(path, sizeof(path), "%s/sys", root);
+        assert(rename(path, real_sys) == 0);
+        write_file(path, "not a directory");
+        assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
+        assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
+        assert(rename(real_sys, path) == 0);
+        assert(unlink(path) == 0);
+        assert(mkdir(path, 0700) == 0);
+    }
+
     /* Dot-dot components are rejected instead of being path-resolved. */
     snprintf(root_alias, sizeof(root_alias), "%s/../%s", root,
              strrchr(root, '/') + 1);
