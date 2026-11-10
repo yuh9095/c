@@ -44,8 +44,9 @@ main(void)
     fputs("[Unit]\nDescription=Base target\n[Target]\n", file);
     assert(fclose(file) == 0);
 
-    assert(ninit_unit_file_load(manager, target_path) == 0);
-    assert(ninit_unit_file_load(manager, service_path) == 0);
+    assert(ninit_unit_file_load_directory(manager, directory) == 0);
+    assert(ninit_unit_manager_count(manager) == 2);
+    assert(strcmp(ninit_unit_manager_at(manager, 0)->name, "base.target") == 0);
     unit = ninit_unit_manager_find(manager, "demo.service");
     assert(unit != NULL);
     assert(unit->type == NINIT_UNIT_SERVICE);
