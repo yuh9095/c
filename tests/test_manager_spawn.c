@@ -4,12 +4,15 @@
 #include <ninit/ipc_channel.h>
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <poll.h>
 #include <signal.h>
 #include <time.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 int
 main(int argc, char **argv)
@@ -22,9 +25,22 @@ main(int argc, char **argv)
     const unsigned char *payload = NULL;
     int status = 0;
     int result;
+    char directory[] = "/tmp/ninit-manager-units-XXXXXX";
+    char unit_path[256];
+    FILE *unit_file;
 
     assert(argc == 2);
-    assert(ninit_manager_start(argv[1], 3000, &manager) == NINIT_IPC_OK);
+    assert(mkdtemp(directory) != NULL);
+    assert(snprintf(unit_path, sizeof(unit_path), "%s/default.target",
+                    directory) > 0);
+    unit_file = fopen(unit_path, "w");
+    assert(unit_file != NULL);
+    assert(fputs("[Unit]\\nDescription=Test default target\\n[Target]\\n",
+                 unit_file) >= 0);
+    assert(fclose(unit_file) == 0);
+    assert(ninit_manager_start_with_config(argv[1], directory,
+                                           "default.target", 3000,
+                                           &manager) == NINIT_IPC_OK);
     assert(manager.pid > 0 && manager.ipc_fd >= 0);
 
     ping.version = NINIT_IPC_VERSION;
@@ -65,6 +81,8 @@ main(int argc, char **argv)
         manager.pid = -1;
     }
     assert(manager.pid == -1);
+    assert(unlink(unit_path) == 0);
+    assert(rmdir(directory) == 0);
     assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
     return 0;
 }
