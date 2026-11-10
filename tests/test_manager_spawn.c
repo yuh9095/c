@@ -50,6 +50,7 @@ main(int argc, char **argv)
         pid_t waited = waitpid(manager.pid, &status, WNOHANG);
         result = waited == manager.pid ? 1 : (waited == 0 ? 0 : -1);
         if (result == 1) {
+            manager.pid = -1;
             break;
         }
         assert(result == 0);
