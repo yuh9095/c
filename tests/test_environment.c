@@ -3,6 +3,8 @@
 #include <ninit/environment.h>
 
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +35,7 @@ main(void)
     struct ninit_environment_options options;
     struct ninit_environment environment;
     struct ninit_environment_policy policy;
+    struct ninit_environment_capabilities shutdown_capabilities;
     char config_value[64];
 
     assert(mkdtemp(root) != NULL);
@@ -297,6 +300,39 @@ main(void)
     ninit_environment_get_policy(&environment, &policy);
     assert(policy.allow_host_shutdown == 0);
     assert(policy.allow_host_cgroup_management == 0);
+
+    /*
+     * Host reboot/poweroff requires both explicit host policy and an
+     * observable effective CAP_SYS_BOOT bit. Containers and guests never
+     * authorize host-level shutdown.
+     */
+    memset(&shutdown_capabilities, 0, sizeof(shutdown_capabilities));
+    shutdown_capabilities.status_available = 1;
+    shutdown_capabilities.cap_sys_boot = 1;
+    ninit_environment_get_policy(&environment, &policy);
+    assert(ninit_environment_authorize_host_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    assert(errno == EPERM);
+
+    options.environment_override = "host";
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    ninit_environment_get_policy(&environment, &policy);
+    assert(ninit_environment_authorize_host_shutdown(
+               &policy, &shutdown_capabilities) == 0);
+    shutdown_capabilities.cap_sys_boot = 0;
+    assert(ninit_environment_authorize_host_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    assert(errno == EPERM);
+    shutdown_capabilities.cap_sys_boot = 1;
+    shutdown_capabilities.status_available = 0;
+    assert(ninit_environment_authorize_host_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    assert(errno == EOPNOTSUPP);
+    shutdown_capabilities.status_available = 1;
+    assert(ninit_environment_authorize_host_shutdown(NULL,
+               &shutdown_capabilities) == -1);
+    assert(errno == EINVAL);
+    options.environment_override = NULL;
 
     /* Missing procfs and missing markers must not be mistaken for a host. */
     snprintf(path, sizeof(path), "%s/proc/sys/kernel/osrelease", root); unlink(path);
