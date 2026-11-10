@@ -10,7 +10,13 @@ extern "C" {
 enum ninit_environment_kind {
     NINIT_ENVIRONMENT_UNKNOWN = 0,
     NINIT_ENVIRONMENT_HOST,
-    NINIT_ENVIRONMENT_CONTAINER
+    NINIT_ENVIRONMENT_CONTAINER,
+    NINIT_ENVIRONMENT_VIRTUAL_MACHINE
+};
+
+enum ninit_virtual_machine_type {
+    NINIT_VM_NONE = 0,
+    NINIT_VM_WSL
 };
 
 enum ninit_container_type {
@@ -39,6 +45,7 @@ enum ninit_environment_evidence {
 struct ninit_environment {
     enum ninit_environment_kind kind;
     enum ninit_container_type container;
+    enum ninit_virtual_machine_type virtual_machine;
     unsigned int evidence;
     int proc_available;
     int is_pid1;
