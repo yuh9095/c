@@ -171,7 +171,6 @@ ninit_mount_manager_plan(const char *root,
     for (i = 0; i < NINIT_MOUNT_PLAN_COUNT; i++) {
         struct ninit_mount_entry *entry = &plan->entries[i];
         char existing_fs[128];
-        char full[4096];
         int mounted;
         int allowed;
 
