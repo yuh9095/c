@@ -743,3 +743,27 @@ ninit_environment_get_policy(const struct ninit_environment *environment,
     }
     /* UNKNOWN deliberately receives the most restrictive policy. */
 }
+int
+ninit_environment_authorize_host_shutdown(
+    const struct ninit_environment_policy *policy,
+    const struct ninit_environment_capabilities *capabilities)
+{
+    if (policy == NULL || capabilities == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!policy->allow_host_shutdown) {
+        errno = EPERM;
+        return -1;
+    }
+    if (!capabilities->status_available) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    if (!capabilities->cap_sys_boot) {
+        errno = EPERM;
+        return -1;
+    }
+    return 0;
+}
+
