@@ -139,6 +139,20 @@ main(void)
     unlink(path);
     snprintf(path, sizeof(path), "%s/run/host", root); rmdir(path);
 
+    /* Runtime marker files identify their respective container runtimes. */
+    snprintf(path, sizeof(path), "%s/run/.containerenv", root);
+    make_file(path, "");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_PODMAN);
+    unlink(path);
+    snprintf(path, sizeof(path), "%s/.dockerenv", root);
+    make_file(path, "");
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_DOCKER);
+    unlink(path);
+
     /* Reset the cgroup fixture before testing PID namespace evidence. */
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root);
     make_file(path, "0::/\n");
