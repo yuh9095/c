@@ -2,7 +2,9 @@
 #include <ninit/ipc_channel.h>
 
 #include <assert.h>
+#include <poll.h>
 #include <signal.h>
+#include <time.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -30,6 +32,10 @@ main(int argc, char **argv)
     ping.request_id = 1234;
     assert(ninit_ipc_send(manager.ipc_fd, &ping, body) == NINIT_IPC_OK);
 
+    {
+        struct pollfd pfd = { manager.ipc_fd, POLLIN, 0 };
+        assert(poll(&pfd, 1, 3000) == 1);
+    }
     result = ninit_ipc_receive(manager.ipc_fd, buffer, sizeof(buffer),
                                &pong, &payload);
     assert(result == NINIT_IPC_OK);
@@ -44,7 +50,10 @@ main(int argc, char **argv)
             break;
         }
         assert(result == 0);
-        usleep(10000);
+        {
+            struct timespec delay = { 0, 10000000L };
+            (void) nanosleep(&delay, NULL);
+        }
     }
     if (manager.pid > 0) {
         (void) kill(manager.pid, SIGTERM);
