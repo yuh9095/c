@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <sys/types.h>
 #include <unistd.h>
 
