@@ -64,7 +64,7 @@ run_manager(int fd)
     result = ninit_ipc_handshake_manager(fd,
                                          NINIT_IPC_HANDSHAKE_TIMEOUT_MS);
     if (result != NINIT_IPC_OK) {
-        fprintf(stderr, "ninit-manager: IPC handshake failed (%d)\\n", result);
+        fprintf(stderr, "ninit-manager: IPC handshake failed (%d)\n", result);
         goto cleanup;
     }
 
@@ -123,7 +123,7 @@ run_manager(int fd)
                     runtime, exec_pids[i]);
                 if (result < 0) {
                     fprintf(stderr,
-                            "ninit-manager: service %ld exec failed: %s\\n",
+                            "ninit-manager: service %ld exec failed: %s\n",
                             (long) exec_pids[i], strerror(errno));
                 }
             }
@@ -132,7 +132,7 @@ run_manager(int fd)
         /* SIGCHLD is a wakeup hint; waitpid drains all waitable children. */
         if (ninit_manager_child_reaper_drain(
                 reaper, manager_child_exited, runtime) < 0) {
-            fprintf(stderr, "ninit-manager: child reap failed: %s\\n",
+            fprintf(stderr, "ninit-manager: child reap failed: %s\n",
                     strerror(errno));
             free(exec_pids);
             free(descriptors);
@@ -157,7 +157,7 @@ run_manager(int fd)
             break;
         }
         if (result != NINIT_IPC_OK) {
-            fprintf(stderr, "ninit-manager: invalid IPC frame (%d)\\n", result);
+            fprintf(stderr, "ninit-manager: invalid IPC frame (%d)\n", result);
             goto cleanup;
         }
 
@@ -166,7 +166,7 @@ run_manager(int fd)
             if (ninit_ipc_send(fd, &header, payload) != NINIT_IPC_OK)
                 goto cleanup;
         } else {
-            fprintf(stderr, "ninit-manager: unsupported IPC message %u\\n",
+            fprintf(stderr, "ninit-manager: unsupported IPC message %u\n",
                     (unsigned int) header.type);
         }
     }
