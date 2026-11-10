@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <signal.h>
 #include <ninit/job_manager.h>
 
 #ifdef __cplusplus
@@ -15,6 +16,10 @@ struct ninit_service_runtime;
 struct ninit_service_runtime *ninit_service_runtime_create(
     struct ninit_job_manager *jobs);
 void ninit_service_runtime_destroy(struct ninit_service_runtime *runtime);
+
+/* Send a signal to every tracked service child; does not reap children. */
+int ninit_service_runtime_signal_all(
+    struct ninit_service_runtime *runtime, int signal_number);
 
 /*
  * Dispatch one Unit from a Start Job.
