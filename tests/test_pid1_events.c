@@ -46,7 +46,7 @@ main(void)
     struct ninit_pid1_event_source events;
     struct signal_result signals = { 0 };
     pid_t child;
-    int events;
+    int event_count;
 
     if (getpid() != 1) {
         assert(ninit_pid1_is_init() == 0);
@@ -62,10 +62,10 @@ main(void)
     }
 
     result.expected_pid = child;
-    events = ninit_pid1_event_source_wait(
+    event_count = ninit_pid1_event_source_wait(
         &events, 3000, record_signal, &signals,
         record_child_exit, &result);
-    assert(events >= 2);
+    assert(event_count >= 2);
     assert(signals.child_seen >= 1);
     assert(result.called == 1);
     assert(result.called == 1);
