@@ -183,93 +183,6 @@ container_from_name(const char *name)
     return NINIT_CONTAINER_OTHER;
 }
 
-static int
-component_has_prefix(const char *component, size_t length,
-                     const char *prefix)
-{
-    size_t prefix_length = strlen(prefix);
-
-    return length >= prefix_length &&
-           memcmp(component, prefix, prefix_length) == 0;
-}
-
-static enum ninit_container_type
-cgroup_path_component_type(const char *component, size_t length)
-{
-    if ((length == 6 && memcmp(component, "docker", 6) == 0) ||
-        component_has_prefix(component, length, "docker-"))
-        return NINIT_CONTAINER_DOCKER;
-    /* Generic containers directories are used by unrelated runtimes. */
-    if (component_has_prefix(component, length, "libpod-"))
-        return NINIT_CONTAINER_PODMAN;
-    if (length >= 8 && memcmp(component, "kubepods", 8) == 0)
-        return NINIT_CONTAINER_OTHER;
-    if ((length == 3 && memcmp(component, "lxc", 3) == 0) ||
-        component_has_prefix(component, length, "lxc.payload-") ||
-        component_has_prefix(component, length, "lxc.monitor-"))
-        return NINIT_CONTAINER_LXC;
-    /* machine.slice also exists on ordinary systemd hosts. */
-    if (component_has_prefix(component, length, "machine-"))
-        return NINIT_CONTAINER_SYSTEMD_NSPAWN;
-    return NINIT_CONTAINER_NONE;
-}
-
-static enum ninit_container_type
-detect_cgroup(const char *root)
-{
-    char full[4096];
-    char line[4096];
-    FILE *file;
-    enum ninit_container_type result = NINIT_CONTAINER_NONE;
-
-    if (make_path(full, sizeof(full), root, "/proc/1/cgroup") < 0)
-        return NINIT_CONTAINER_NONE;
-    file = fopen(full, "r");
-    if (file == NULL)
-        return NINIT_CONTAINER_NONE;
-
-    while (fgets(line, sizeof(line), file) != NULL) {
-        char *first_colon = strchr(line, ':');
-        char *second_colon;
-        char *path;
-        char *cursor;
-
-        if (first_colon == NULL)
-            continue;
-        second_colon = strchr(first_colon + 1, ':');
-        if (second_colon == NULL || second_colon[1] != '/')
-            continue;
-
-        /* The third field is the cgroup path; ignore controller names. */
-        path = second_colon + 1;
-        cursor = path;
-        while (*cursor != '\0' && *cursor != '\n' && *cursor != '\r') {
-            char *component;
-            size_t length;
-            enum ninit_container_type candidate;
-
-            while (*cursor == '/')
-                cursor++;
-            component = cursor;
-            while (*cursor != '\0' && *cursor != '/' &&
-                   *cursor != '\n' && *cursor != '\r')
-                cursor++;
-            length = (size_t) (cursor - component);
-            if (length == 0)
-                break;
-
-            candidate = cgroup_path_component_type(component, length);
-            if (candidate == NINIT_CONTAINER_NONE)
-                continue;
-            if (result == NINIT_CONTAINER_NONE)
-                result = candidate;
-            else if (result != candidate)
-                result = NINIT_CONTAINER_OTHER;
-        }
-    }
-    fclose(file);
-    return result;
-}
 
 const char *
 ninit_container_type_name(enum ninit_container_type type)
@@ -369,8 +282,22 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         return 0;
     }
 
-    if (container_env != NULL && container_env[0] != '\0') {
+    /* systemd treats container= as authoritative only for PID 1. */
+    if (environment->is_pid1 && container_env != NULL) {
+        if (container_env[0] == '\0')
+            return 0;
         type = container_from_name(container_env);
+        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+        environment->container = type == NINIT_CONTAINER_NONE ?
+                                 NINIT_CONTAINER_OTHER : type;
+        environment->evidence |= NINIT_ENV_EVIDENCE_ENVIRONMENT;
+        return 0;
+    }
+
+    /* Container managers may publish an unprivileged identification file. */
+    if (read_first_line(root, "/run/host/container-manager",
+                        value, sizeof(value)) == 0 && value[0] != '\0') {
+        type = container_from_name(value);
         environment->kind = NINIT_ENVIRONMENT_CONTAINER;
         environment->container = type == NINIT_CONTAINER_NONE ?
                                  NINIT_CONTAINER_OTHER : type;
@@ -420,13 +347,6 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         return 0;
     }
 
-    type = detect_cgroup(root);
-    if (type != NINIT_CONTAINER_NONE) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = type;
-        environment->evidence |= NINIT_ENV_EVIDENCE_CGROUP;
-        return 0;
-    }
 
     proc_status = path_exists(root, "/proc/self/status");
     if (proc_status > 0)
