@@ -144,7 +144,6 @@ main(void)
     assert(ninit_environment_detect(&options, &environment) == 0);
     assert(environment.container == NINIT_CONTAINER_PODMAN);
     unlink(path);
-    unlink("/dev/null/ninit-test-nonexistent");
     snprintf(path, sizeof(path), "%s/run/host/container-manager", root);
     unlink(path);
     snprintf(path, sizeof(path), "%s/run/host", root); rmdir(path);
@@ -191,6 +190,11 @@ main(void)
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_PODMAN);
     assert((environment.evidence & NINIT_ENV_EVIDENCE_SYSTEMD_FILE) != 0);
+    /* PID 1 does not consume /run/systemd/container as its own hint. */
+    options.is_pid1 = 1;
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_UNKNOWN);
+    options.is_pid1 = 0;
     ninit_environment_get_policy(&environment, &policy);
     assert(policy.allow_mount_devtmpfs == 0);
     assert(policy.allow_host_shutdown == 0);
