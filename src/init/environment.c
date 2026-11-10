@@ -189,6 +189,24 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         return 0;
     }
 
+    /* OpenRC-compatible WSL indicators. */
+    if (path_exists(root, "/proc/sys/fs/binfmt_misc/WSLInterop") > 0 ||
+        getenv("WSL_DISTRO_NAME") != NULL) {
+        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+        environment->container = NINIT_CONTAINER_WSL;
+        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
+        return 0;
+    }
+    if (read_first_line(root, "/proc/sys/kernel/osrelease",
+                        value, sizeof(value)) == 0 &&
+        (strstr(value, "Microsoft") != NULL ||
+         strstr(value, "microsoft") != NULL)) {
+        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+        environment->container = NINIT_CONTAINER_WSL;
+        environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
+        return 0;
+    }
+
     /* OpenVZ's /proc/vz exists on host and guest; /proc/bc is host-only. */
     if (path_exists(root, "/proc/vz") > 0 &&
         path_exists(root, "/proc/bc") == 0) {
