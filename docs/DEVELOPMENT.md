@@ -211,3 +211,29 @@ Linux-VServer/UML and namespace/chroot detection, then make mount and shutdown
 operations consume the policy. Do not treat the current detector as a complete
 security boundary or assume that a detected container name proves a specific
 capability set.
+
+
+### Administrator environment override (rc_sys-style)
+
+PID 1 accepts `--environment` as an explicit administrator override. Values
+are `auto` (default), `host`, `container`, or a recognized container type
+(`docker`, `podman`, `lxc`, `openvz`, `systemd-nspawn`, `wsl`,
+`proot`, `oci`, `other`). The `container:TYPE` spelling is also accepted.
+For example:
+
+```sh
+ninit-init --environment auto
+ninit-init --environment lxc
+ninit-init --environment host
+```
+
+An explicit value takes precedence over all automatic indicators, matching
+OpenRC's administrator-controlled `rc_sys` concept. Unknown values are
+configuration errors and cause startup to fail rather than silently selecting
+a potentially unsafe host policy. `host` is an explicit trust decision: it
+enables the host policy even if runtime markers say container, so it must only
+be used by an administrator who controls the boot configuration.
+
+This first override is currently exposed through the PID 1 command line and
+the detector API. A persistent configuration file and service-level
+environment keywords are not implemented yet.
