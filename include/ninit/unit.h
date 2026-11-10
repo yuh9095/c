@@ -30,6 +30,8 @@ struct ninit_unit_spec {
     size_t after_count;
     const char *const *before;
     size_t before_count;
+    const char *const *exec_stop_argv;
+    size_t exec_stop_argc;
 };
 
 /* Unit objects are owned by the manager and remain valid until removal/destruction. */
@@ -47,6 +49,8 @@ struct ninit_unit {
     size_t after_count;
     char **before;
     size_t before_count;
+    char **exec_stop_argv;
+    size_t exec_stop_argc;
 };
 
 #ifdef __cplusplus
