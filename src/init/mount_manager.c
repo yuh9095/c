@@ -168,7 +168,9 @@ ninit_mount_manager_plan(const char *root,
         allowed = i == NINIT_MOUNT_PROC ? policy->allow_mount_proc :
                   i == NINIT_MOUNT_SYS ? policy->allow_mount_sys :
                                          policy->allow_mount_devtmpfs;
-        if (!allowed || !caps->status_available || !caps->cap_sys_admin) {
+        if (!allowed || !caps->status_available || !caps->cap_sys_admin ||
+            !caps->mount_namespace_available ||
+            !caps->mount_namespace_matches_pid1) {
             entry->action = NINIT_MOUNT_BLOCKED;
             continue;
         }
