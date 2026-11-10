@@ -23,6 +23,8 @@ enum ninit_manager_supervisor_state {
  */
 struct ninit_manager_supervisor {
     const char *manager_path;
+    const char *unit_dir;
+    const char *target;
     struct ninit_manager_process process;
     enum ninit_manager_supervisor_state state;
     unsigned int restart_count;
@@ -43,6 +45,11 @@ int ninit_manager_supervisor_init(
     unsigned int base_delay_ms,
     unsigned int max_delay_ms,
     int handshake_timeout_ms);
+
+int ninit_manager_supervisor_set_startup_target(
+    struct ninit_manager_supervisor *supervisor,
+    const char *unit_dir,
+    const char *target);
 
 int ninit_manager_supervisor_start(
     struct ninit_manager_supervisor *supervisor,
