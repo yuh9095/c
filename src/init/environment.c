@@ -405,6 +405,7 @@ ninit_environment_detect(const struct ninit_environment_options *options,
         return 0;
     }
 
+    proc_status = path_exists(root, "/proc/self/status");
     if (proc_status > 0)
         environment->proc_available = 1;
 
