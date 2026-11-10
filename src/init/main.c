@@ -172,7 +172,7 @@ main(int argc, char **argv)
         fprintf(stderr, "ninit-init: capability probe: mountinfo=%s status=%s "
                 "CAP_SYS_ADMIN=%s CAP_SYS_BOOT=%s mount-ns=%s "
                 "matches-pid1=%s inode=%llu root-mount=%s "
-                "root-shared=%s\n",
+                "root-shared=%s root-read-only=%s\n",
                 environment_capabilities.mountinfo_available ? "yes" : "no",
                 environment_capabilities.status_available ? "yes" : "no",
                 environment_capabilities.status_available ?
@@ -190,6 +190,9 @@ main(int argc, char **argv)
                 environment_capabilities.root_mount_found ? "yes" : "no",
                 environment_capabilities.root_mount_found ?
                     (environment_capabilities.root_mount_shared ? "yes" : "no") :
+                    "unknown",
+                environment_capabilities.root_mount_found ?
+                    (environment_capabilities.root_mount_read_only ? "yes" : "no") :
                     "unknown");
     }
     if (environment_capabilities.mountinfo_available &&
@@ -199,9 +202,17 @@ main(int argc, char **argv)
         for (mount_index = 0; mount_index < mount_plan.count; mount_index++) {
             const struct ninit_mount_entry *entry =
                 &mount_plan.entries[mount_index];
-            fprintf(stderr, "ninit-init: mount plan: %s -> %s (%s)\n",
+            fprintf(stderr,
+                    "ninit-init: mount plan: %s -> %s (%s) "
+                    "existing-options=nosuid:%s,nodev:%s,noexec:%s\n",
                     entry->path, entry->filesystem,
-                    ninit_mount_action_name(entry->action));
+                    ninit_mount_action_name(entry->action),
+                    (entry->existing_mount_options &
+                     NINIT_MOUNT_OPTION_NOSUID) ? "yes" : "no",
+                    (entry->existing_mount_options &
+                     NINIT_MOUNT_OPTION_NODEV) ? "yes" : "no",
+                    (entry->existing_mount_options &
+                     NINIT_MOUNT_OPTION_NOEXEC) ? "yes" : "no");
         }
     } else {
         fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\n");
