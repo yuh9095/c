@@ -422,9 +422,17 @@ ninit_mount_manager_apply(const char *root,
     struct ninit_environment_capabilities caps;
     size_t i;
 
-    if (plan == NULL || plan->count > NINIT_MOUNT_PLAN_COUNT) {
+    if (plan == NULL || plan->count != NINIT_MOUNT_PLAN_COUNT) {
         errno = EINVAL;
         return -1;
+    }
+    for (i = 0; i < plan->count; i++) {
+        if (plan->entries[i].target != templates[i].target ||
+            plan->entries[i].action < NINIT_MOUNT_SKIP ||
+            plan->entries[i].action > NINIT_MOUNT_BLOCKED) {
+            errno = EINVAL;
+            return -1;
+        }
     }
     for (i = 0; i < plan->count; i++) {
         const struct ninit_mount_entry *entry = &plan->entries[i];
@@ -469,6 +477,26 @@ ninit_mount_manager_apply(const char *root,
         target_fd = open_mountpoint_directory(root, entry->path);
         if (target_fd < 0)
             return -1;
+
+        /*
+         * Recheck after pinning the target directory. This closes the window
+         * between the first mountinfo read and openat(), though mountinfo
+         * cannot provide an atomic compare-and-mount operation.
+         */
+        mounted = find_mount(root, entry->path, existing_fs,
+                             sizeof(existing_fs), NULL);
+        if (mounted < 0) {
+            int saved_errno = errno;
+            close(target_fd);
+            errno = saved_errno;
+            return -1;
+        }
+        if (mounted) {
+            close(target_fd);
+            errno = strcmp(existing_fs, entry->filesystem) == 0 ?
+                    EALREADY : EBUSY;
+            return -1;
+        }
 
         if (callback != NULL) {
             int callback_result;
