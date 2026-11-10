@@ -156,7 +156,9 @@ apply_environment_override(const char *override,
             override = "other";
 
         type = container_from_name(override);
-        if (type == NINIT_CONTAINER_NONE)
+        if (type == NINIT_CONTAINER_NONE ||
+            (type == NINIT_CONTAINER_OTHER &&
+             strcmp(override, "other") != 0))
             return -1;
         environment->kind = NINIT_ENVIRONMENT_CONTAINER;
         environment->container = type;
