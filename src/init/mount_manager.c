@@ -218,7 +218,11 @@ ninit_mount_manager_apply(const char *root,
             entry->source == NULL ||
             strcmp(entry->path, templates[i].path) != 0 ||
             strcmp(entry->filesystem, templates[i].filesystem) != 0 ||
-            strcmp(entry->source, templates[i].source) != 0) {
+            strcmp(entry->source, templates[i].source) != 0 ||
+            entry->flags != templates[i].flags ||
+            ((entry->data == NULL) != (templates[i].data == NULL)) ||
+            (entry->data != NULL &&
+             strcmp(entry->data, templates[i].data) != 0)) {
             errno = EINVAL;
             return -1;
         }
