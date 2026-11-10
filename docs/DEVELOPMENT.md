@@ -129,6 +129,12 @@ Unit File Loader 当前支持 [Unit] 的 Description/Requires/Wants/After/Before
 当前 Manager 主循环已接入 SIGCHLD self-pipe、Service Runtime 的 child-exit 回调，以及服务 exec-error 管道的 poll 监听。exec 成功/失败结果会反馈给 Start Job。尚未接入 Unit 加载和 Job 提交，因此主循环目前还没有自动启动服务；也未实现服务运行状态、停止信号、超时、重启策略或进程组管理。不要将此模块单独视为完整服务监督器。
 
 
+## PID 1 启动配置传递
+
+PID 1 侧提供 `ninit_manager_start_with_config()`，可在启动 Manager 时传递 Unit 目录和目标；旧的 `ninit_manager_start()` 保留并继续启动 IPC-only 模式。Manager Supervisor 可通过 `ninit_manager_supervisor_set_startup_target()` 设置同一配置，首次启动和崩溃退避后的重启都会使用该配置。
+
+传入 Supervisor 的 `unit_dir` 和 `target` 字符串由调用者持有，必须在 Supervisor 生命周期内保持有效。配置必须同时提供或同时为 NULL。
+
 ## Manager 原生启动入口（第一版）
 
 `ninit-manager` 现在接受可选参数：
