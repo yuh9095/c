@@ -284,6 +284,8 @@ it to produce a read-only early mount plan.
 - `ninit_mount_manager_apply()` 只执行 plan 中的 mount 项；每次 mount 前重新读取 mountinfo 和有效 capability，拒绝过期计划，并校验目标、文件系统、source、flags 和 mount options 均属于内置白名单。
 - 测试可注入 mount callback；生产调用传 NULL 时使用 Linux `mount(2)`。实际 syscall errno 是最终结果，能力位只是必要条件，不是成功保证。
 
+对已经存在且 filesystem 类型正确的挂载，plan 还会报告 mountinfo 第六字段中的有效 VFS 安全选项：`nosuid`、`nodev`、`noexec`。这些值通过 `existing_mount_options` 位标志提供给调用者。`/proc` 和 `/sys` 推荐同时具备三项，`/dev` 至少推荐 `nosuid`；由于运行时可能有意提供不同选项，Ninit 只报告差异，不自动 remount，也不把已有挂载替换掉。新建挂载仍通过固定的 mount flags 设置这些约束。
+
 PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动时改变挂载命名空间。容器/未知环境的策略保持保守，VM/host 只有在 capability 和 mount 状态满足条件时才会规划挂载。下一阶段需进一步验证 mount namespace 身份、挂载传播属性、只读根文件系统及容器运行时约束，再决定是否在 PID1 sysinit 阶段启用显式 apply。
 
 
