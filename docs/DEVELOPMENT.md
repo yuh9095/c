@@ -87,3 +87,16 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 名称目前限制为最多 255 个 ASCII 字母数字字符以及 `_`、`-`、`.`、`@`、`:`。依赖名称在注册时只做语法检查；是否存在、是否形成循环以及实际启动顺序由后续 Dependency Engine 负责。
 
 该模块是数据模型和注册表，不是完整服务管理器。配置文件解析、Unit 状态、Job 调度、进程监督和 systemd/OpenRC 兼容均未实现。
+
+
+## Dependency Engine（第一版）
+
+`include/ninit/dependency_plan.h` 根据指定 Target 生成激活计划：
+
+- 从根 Target 迭代计算 Requires/Wants 闭包；Requires 缺失返回 `ENOENT`，Wants 缺失忽略。
+- After/Before 只建立排序边，不会单独激活服务；引用的 Unit 不在激活闭包时忽略。
+- `After=X` 表示 X 在当前 Unit 之前；`Before=X` 表示当前 Unit 在 X 之前。
+- 使用稳定的 Kahn 分层拓扑排序；同一 wave 中的 Unit 在其所有前置排序约束满足后可并行启动。
+- 排序环路返回 `ELOOP`。计划只保存 manager 所有的只读 Unit 指针，必须在 manager 销毁前释放计划。
+
+该模块只生成计划，不创建 Job、不 fork/exec，也不跟踪服务状态。当前实现使用邻接矩阵表达排序边，适合当前小规模原生 Unit 集合；后续规模扩大时再评估稀疏图结构。
