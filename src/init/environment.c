@@ -209,7 +209,7 @@ cgroup_path_component_type(const char *component, size_t length)
         component_has_prefix(component, length, "lxc.payload-") ||
         component_has_prefix(component, length, "lxc.monitor-"))
         return NINIT_CONTAINER_LXC;
-    if ((length == 12 && memcmp(component, "machine.slice", 12) == 0) ||
+    if ((length == 13 && memcmp(component, "machine.slice", 13) == 0) ||
         component_has_prefix(component, length, "machine-"))
         return NINIT_CONTAINER_SYSTEMD_NSPAWN;
     return NINIT_CONTAINER_NONE;
