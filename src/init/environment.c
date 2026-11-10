@@ -479,9 +479,9 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     /*
      * PID namespace identity is independent of cgroup layout. Containers
      * using cgroup v2, private cgroup mounts, or hidden cgroup files must
-     * still be recognized from /proc/1/ns/pid when Ninit is PID 1.
+     * still be recognized from the current process' PID namespace handle.
      */
-    if (environment->is_pid1 && environment->proc_available) {
+    if (environment->proc_available) {
         char namespace_path[4096];
         int namespace_fd;
         int namespace_type;
