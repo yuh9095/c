@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,9 @@
  * libc development packages (notably musl) do not install. */
 #ifndef NS_GET_PARENT
 #define NS_GET_PARENT _IO(0xb7, 0x2)
+#endif
+#ifndef NS_GET_NSTYPE
+#define NS_GET_NSTYPE _IO(0xb7, 0x3)
 #endif
 
 static int
@@ -378,6 +382,7 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     if (environment->is_pid1 && environment->proc_available) {
         char namespace_path[4096];
         int namespace_fd;
+        int namespace_type;
         int parent_fd;
 
         if (make_path(namespace_path, sizeof(namespace_path), root,
@@ -389,11 +394,19 @@ ninit_environment_detect(const struct ninit_environment_options *options,
             return 0;
         }
 
-        environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE;
+        namespace_type = ioctl(namespace_fd, NS_GET_NSTYPE);
+        if (namespace_type != CLONE_NEWPID) {
+            close(namespace_fd);
+            return 0;
+        }
+        environment->pid_namespace_available = 1;
+        environment->evidence |= NINIT_ENV_EVIDENCE_NAMESPACE |
+                                 NINIT_ENV_EVIDENCE_PID_NAMESPACE;
         parent_fd = ioctl(namespace_fd, NS_GET_PARENT);
         close(namespace_fd);
         if (parent_fd >= 0) {
             close(parent_fd);
+            environment->pid_namespace_parent_visible = 1;
             environment->kind = NINIT_ENVIRONMENT_CONTAINER;
             environment->container = NINIT_CONTAINER_OTHER;
             return 0;
