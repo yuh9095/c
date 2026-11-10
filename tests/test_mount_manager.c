@@ -172,9 +172,8 @@ main(void)
         write_file(path, "not a directory");
         assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
         assert(plan.entries[1].action == NINIT_MOUNT_CONFLICT);
-        assert(rename(real_sys, path) == 0);
         assert(unlink(path) == 0);
-        assert(mkdir(path, 0700) == 0);
+        assert(rename(real_sys, path) == 0);
     }
 
     /* Dot-dot components are rejected instead of being path-resolved. */
