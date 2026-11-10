@@ -1,6 +1,5 @@
 #include <ninit/unit_manager.h>
 
-#include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,8 +43,9 @@ valid_name(const char *name)
     }
     for (i = 0; i < length; ++i) {
         unsigned char ch = (unsigned char)name[i];
-        if (!(isalnum(ch) || ch == '_' || ch == '-' || ch == '.' ||
-              ch == '@' || ch == ':')) {
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+              (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' ||
+              ch == '.' || ch == '@' || ch == ':')) {
             return 0;
         }
     }
@@ -73,7 +73,7 @@ unit_free(struct ninit_unit *unit)
     }
     free(unit->name);
     free(unit->description);
-    free(unit->exec_start);
+    free_string_array(unit->exec_start_argv, unit->exec_start_argc);
     free_string_array(unit->requires, unit->requires_count);
     free_string_array(unit->wants, unit->wants_count);
     free_string_array(unit->after, unit->after_count);
@@ -126,15 +126,16 @@ unit_copy(const struct ninit_unit_spec *spec)
     }
     unit->name = copy_string(spec->name);
     unit->description = copy_string(spec->description);
-    unit->exec_start = copy_string(spec->exec_start);
     unit->type = spec->type;
+    unit->exec_start_argc = spec->exec_start_argc;
     unit->requires_count = spec->requires_count;
     unit->wants_count = spec->wants_count;
     unit->after_count = spec->after_count;
     unit->before_count = spec->before_count;
     if (unit->name == NULL ||
         (spec->description != NULL && unit->description == NULL) ||
-        (spec->exec_start != NULL && unit->exec_start == NULL) ||
+        copy_string_array(&unit->exec_start_argv, spec->exec_start_argv,
+                          spec->exec_start_argc) != 0 ||
         copy_string_array(&unit->requires, spec->requires,
                           spec->requires_count) != 0 ||
         copy_string_array(&unit->wants, spec->wants,
@@ -195,7 +196,9 @@ ninit_unit_manager_add(struct ninit_unit_manager *manager,
 
     if (manager == NULL || spec == NULL || !valid_name(spec->name) ||
         (spec->type != NINIT_UNIT_SERVICE && spec->type != NINIT_UNIT_TARGET) ||
-        (spec->type == NINIT_UNIT_TARGET && spec->exec_start != NULL)) {
+        (spec->type == NINIT_UNIT_TARGET && spec->exec_start_argc != 0) ||
+        (spec->type == NINIT_UNIT_SERVICE &&
+         (spec->exec_start_argv == NULL || spec->exec_start_argc == 0))) {
         errno = EINVAL;
         return -1;
     }
