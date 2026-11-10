@@ -15,6 +15,7 @@ main(void)
     char directory[] = "/tmp/ninit-unit-file-XXXXXX";
     char service_path[256];
     char target_path[256];
+    char broken_path[256];
     struct ninit_unit_manager *manager;
     const struct ninit_unit *unit;
     FILE *file;
@@ -24,6 +25,8 @@ main(void)
                     "%s/demo.service", directory) > 0);
     assert(snprintf(target_path, sizeof(target_path),
                     "%s/base.target", directory) > 0);
+    assert(snprintf(broken_path, sizeof(broken_path),
+                    "%s/broken.service", directory) > 0);
     manager = ninit_unit_manager_create();
     assert(manager != NULL);
 
@@ -61,9 +64,19 @@ main(void)
     assert(strcmp(unit->exec_start_argv[2], "escaped value") == 0);
     assert(unit->exec_start_argv[3] == NULL);
 
+    file = fopen(broken_path, "w");
+    assert(file != NULL);
+    fputs("[Unit]\\n[Service]\\nExecStart=/bin/echo trailing\\\\\\n", file);
+    assert(fclose(file) == 0);
+    errno = 0;
+    assert(ninit_unit_file_load(manager, broken_path) == -1);
+    assert(errno == EINVAL);
+    assert(ninit_unit_manager_find(manager, "broken.service") == NULL);
+
     ninit_unit_manager_destroy(manager);
     assert(unlink(service_path) == 0);
     assert(unlink(target_path) == 0);
+    assert(unlink(broken_path) == 0);
     assert(rmdir(directory) == 0);
     return 0;
 }
