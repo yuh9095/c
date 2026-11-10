@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -55,6 +56,9 @@ static void
 free_string_array(char **items, size_t count)
 {
     size_t i;
+    if (items == NULL) {
+        return;
+    }
     for (i = 0; i < count; ++i) {
         free(items[i]);
     }
@@ -124,6 +128,10 @@ unit_copy(const struct ninit_unit_spec *spec)
     unit->description = copy_string(spec->description);
     unit->exec_start = copy_string(spec->exec_start);
     unit->type = spec->type;
+    unit->requires_count = spec->requires_count;
+    unit->wants_count = spec->wants_count;
+    unit->after_count = spec->after_count;
+    unit->before_count = spec->before_count;
     if (unit->name == NULL ||
         (spec->description != NULL && unit->description == NULL) ||
         (spec->exec_start != NULL && unit->exec_start == NULL) ||
@@ -138,10 +146,6 @@ unit_copy(const struct ninit_unit_spec *spec)
         unit_free(unit);
         return NULL;
     }
-    unit->requires_count = spec->requires_count;
-    unit->wants_count = spec->wants_count;
-    unit->after_count = spec->after_count;
-    unit->before_count = spec->before_count;
     return unit;
 }
 
