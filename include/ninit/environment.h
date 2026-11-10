@@ -45,6 +45,7 @@ struct ninit_environment {
 struct ninit_environment_options {
     const char *root;
     const char *container_environment;
+    const char *environment_override; /* auto, host, container, or container type */
     int is_pid1;
 };
 
