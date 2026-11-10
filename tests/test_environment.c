@@ -118,6 +118,9 @@ main(void)
     assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
     assert(environment.container == NINIT_CONTAINER_OTHER);
 
+    /* Clear cgroup evidence before testing the independent PID namespace. */
+    make_file(path, "0::/\n");
+
     /* A PID-1 namespace handle that cannot answer NS_GET_PARENT is
      * inconclusive; never classify it as HOST using an inode constant.
      */
