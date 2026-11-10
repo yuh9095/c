@@ -127,12 +127,12 @@ ninit_dependency_plan_build(const struct ninit_unit_manager *manager,
             }
         }
         if (added == 0) { errno = ELOOP; goto fail; }
-        for (i = 0; i < n; ++i) {
-            if (!active[i] || !done[i] || plan->waves[first] != plan->wave_count)
-                continue;
-            for (j = 0; j < n; ++j)
-                if (active[j] && edges[i * n + j] && indegree[j] > 0)
+        for (i = first; i < plan->count; ++i) {
+            size_t completed = unit_index(manager, plan->units[i]->name);
+            for (j = 0; j < n; ++j) {
+                if (active[j] && edges[completed * n + j] && indegree[j] > 0)
                     --indegree[j];
+            }
         }
         ++plan->wave_count;
     }
