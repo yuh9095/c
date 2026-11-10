@@ -37,6 +37,9 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 ## 设计约束
 
 - PID 1 优先保证信号处理、子进程回收最终保障和紧急输出。
+- PID 1 统一使用一个 waitpid(-1, WNOHANG) 路径回收所有子进程；Manager 和其他模块不得自行 waitpid 竞争回收。
+- PID 1 信号处理函数只向 NONBLOCK self-pipe 写入信号编号；事件循环在普通上下文中分发信号并执行回收/关机协调。
+- self-pipe 即使因信号突发而满，事件循环每次醒来仍必须调用统一子进程回收函数，避免丢失 SIGCHLD 通知造成僵尸进程。
 - Manager 内模块通过清晰 API 协作，不要求每个模块独立成进程。
 - Job Manager 是服务控制操作的统一调度入口。
 - systemd Unit 兼容层与 Ninit 原生 Unit 模型隔离。
