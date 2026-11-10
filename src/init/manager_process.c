@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <signal.h>
 #include <spawn.h>
 #include <stdlib.h>
 #include <sys/wait.h>
