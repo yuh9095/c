@@ -4,6 +4,8 @@
 #include <ninit/ipc_protocol.h>
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -27,10 +29,24 @@ main(int argc, char **argv)
     pid_t second_pid;
     int status = 0;
     int result;
+    char directory[] = "/tmp/ninit-supervisor-units-XXXXXX";
+    char unit_path[256];
+    FILE *unit_file;
 
     assert(argc == 2);
+    assert(mkdtemp(directory) != NULL);
+    assert(snprintf(unit_path, sizeof(unit_path), "%s/default.target",
+                    directory) > 0);
+    unit_file = fopen(unit_path, "w");
+    assert(unit_file != NULL);
+    assert(fputs("[Unit]\nDescription=Supervisor target\n[Target]\n",
+                 unit_file) >= 0);
+    assert(fclose(unit_file) == 0);
     assert(ninit_manager_supervisor_init(&supervisor, argv[1],
                                          2, 10, 40, 3000) == NINIT_IPC_OK);
+
+    assert(ninit_manager_supervisor_set_startup_target(
+               &supervisor, directory, "default.target") == NINIT_IPC_OK);
 
     now = at_ms(100, 0);
     assert(ninit_manager_supervisor_start(&supervisor, &now) == NINIT_IPC_OK);
@@ -63,5 +79,7 @@ main(int argc, char **argv)
                                                    status, &now);
     assert(result == NINIT_IPC_OK);
     assert(supervisor.state == NINIT_MANAGER_STOPPED);
+    assert(unlink(unit_path) == 0);
+    assert(rmdir(directory) == 0);
     return 0;
 }
