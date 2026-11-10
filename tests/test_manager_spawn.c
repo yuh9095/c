@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <ninit/manager_process.h>
 #include <ninit/ipc_channel.h>
 
