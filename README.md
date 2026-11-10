@@ -54,7 +54,7 @@ Ninit 采用 PID 1 与服务管理器分离的进程架构。
 - Socket、Timer、Path 等事件触发功能。
 - 日志采集、存储和查询。
 
-PID 1 与 Manager 通过内部 IPC 通信。当前已实现版本化消息帧的编码、解码和输入校验；套接字传输、进程管理和故障恢复仍在开发中。
+PID 1 与 Manager 通过内部 IPC 通信。当前已实现版本化消息帧的编码、解码和输入校验，以及基于 Unix SOCK_SEQPACKET 的私有 socketpair 通道；PID1/Manager 进程管理、握手、重连和故障恢复仍在开发中。
 
 ## 计划中的功能模块
 
