@@ -200,7 +200,7 @@ ninit_unit_manager_add(struct ninit_unit_manager *manager,
         (spec->type == NINIT_UNIT_SERVICE &&
          (spec->exec_start_argv == NULL || spec->exec_start_argc == 0 ||
           spec->exec_start_argv[0] == NULL ||
-          spec->exec_start_argv[0][0] == '\\0'))) {
+          spec->exec_start_argv[0][0] == '\0'))) {
         errno = EINVAL;
         return -1;
     }
