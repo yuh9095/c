@@ -243,8 +243,14 @@ apply_environment_override(const char *override,
             (type == NINIT_CONTAINER_OTHER &&
              strcmp(override, "other") != 0))
             return -1;
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = type;
+        if (type == NINIT_CONTAINER_WSL) {
+            environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
+            environment->container = NINIT_CONTAINER_NONE;
+            environment->virtual_machine = NINIT_VM_WSL;
+        } else {
+            environment->kind = NINIT_ENVIRONMENT_CONTAINER;
+            environment->container = type;
+        }
     }
     environment->evidence = NINIT_ENV_EVIDENCE_OVERRIDE;
     return 1;
@@ -318,8 +324,9 @@ ninit_environment_detect(const struct ninit_environment_options *options,
     /* OpenRC-compatible WSL indicators. */
     if (path_exists(root, "/proc/sys/fs/binfmt_misc/WSLInterop") > 0 ||
         getenv("WSL_DISTRO_NAME") != NULL) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_WSL;
+        environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
+        environment->container = NINIT_CONTAINER_NONE;
+        environment->virtual_machine = NINIT_VM_WSL;
         environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
         return 0;
     }
@@ -327,8 +334,9 @@ ninit_environment_detect(const struct ninit_environment_options *options,
                         value, sizeof(value)) == 0 &&
         (strstr(value, "Microsoft") != NULL ||
          strstr(value, "microsoft") != NULL)) {
-        environment->kind = NINIT_ENVIRONMENT_CONTAINER;
-        environment->container = NINIT_CONTAINER_WSL;
+        environment->kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
+        environment->container = NINIT_CONTAINER_NONE;
+        environment->virtual_machine = NINIT_VM_WSL;
         environment->evidence |= NINIT_ENV_EVIDENCE_MARKER;
         return 0;
     }
