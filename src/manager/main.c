@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,6 +33,82 @@ manager_child_exited(pid_t pid, int wait_status, void *userdata)
                 "ninit-manager: failed to record child %ld exit: %s\n",
                 (long) pid, strerror(errno));
     }
+}
+
+static int
+stop_service_children(struct ninit_service_runtime *runtime,
+                      struct ninit_manager_child_reaper *reaper)
+{
+    if (runtime == NULL || reaper == NULL)
+        return 0;
+
+    if (ninit_service_runtime_tracked_count(runtime) == 0)
+        return 0;
+
+    /*
+     * Manager shutdown is a hard boundary: no service may outlive the
+     * process that owns its supervision and child-reaping responsibilities.
+     * Send SIGKILL, then let the single child-reaper path collect every PID.
+     */
+    if (ninit_service_runtime_signal_all(runtime, SIGKILL) < 0)
+        return -1;
+
+    while (ninit_service_runtime_tracked_count(runtime) != 0) {
+        size_t count = ninit_service_runtime_exec_pending_count(runtime);
+        struct pollfd *fds = calloc(count + 1, sizeof(*fds));
+        pid_t *pids = count == 0 ? NULL : calloc(count, sizeof(*pids));
+        size_t i;
+        int result;
+
+        if (fds == NULL || (count != 0 && pids == NULL)) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+
+        fds[0].fd = ninit_manager_child_reaper_fd(reaper);
+        fds[0].events = POLLIN;
+        for (i = 0; i < count; ++i) {
+            int exec_fd;
+            if (ninit_service_runtime_exec_pending_at(
+                    runtime, i, &pids[i], &exec_fd) < 0) {
+                free(pids);
+                free(fds);
+                return -1;
+            }
+            fds[i + 1].fd = exec_fd;
+            fds[i + 1].events = POLLIN;
+        }
+
+        do {
+            result = poll(fds, count + 1, -1);
+        } while (result < 0 && errno == EINTR);
+        if (result < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+
+        for (i = 0; i < count; ++i) {
+            if ((fds[i + 1].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+                int check = ninit_service_runtime_check_exec(runtime, pids[i]);
+                if (check < 0 && errno != ECHILD)
+                    fprintf(stderr,
+                            "ninit-manager: service %ld exec cleanup: %s\\n",
+                            (long) pids[i], strerror(errno));
+            }
+        }
+
+        if (ninit_manager_child_reaper_drain(
+                reaper, manager_child_exited, runtime) < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        free(pids);
+        free(fds);
+    }
+    return 0;
 }
 
 static int
@@ -171,6 +248,9 @@ run_manager(int fd)
         }
     }
 cleanup:
+    if (stop_service_children(runtime, reaper) < 0)
+        fprintf(stderr, "ninit-manager: failed to stop service children: %s\\n",
+                strerror(errno));
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
     ninit_job_manager_destroy(jobs);
