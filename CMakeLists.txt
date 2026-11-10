@@ -35,6 +35,7 @@ add_library(ninit-init-core STATIC
     src/init/pid1_events.c
     src/init/pid1_setup.c
     src/init/environment.c
+    src/init/mount_manager.c
     src/init/boot_coordinator.c
 )
 target_link_libraries(ninit-init-core PUBLIC ninit-common)
@@ -98,6 +99,11 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-environment PRIVATE ninit-init-core)
     target_compile_options(test-environment PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME environment-detection COMMAND test-environment)
+
+    add_executable(test-mount-manager tests/test_mount_manager.c)
+    target_link_libraries(test-mount-manager PRIVATE ninit-init-core)
+    target_compile_options(test-mount-manager PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME mount-manager COMMAND test-mount-manager)
 
     add_executable(test-pid1-setup tests/test_pid1_setup.c)
     target_link_libraries(test-pid1-setup PRIVATE ninit-init-core)
