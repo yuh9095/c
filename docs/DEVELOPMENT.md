@@ -10,7 +10,7 @@
 
 ## IPC 协议与传输层
 
-`include/ninit/ipc_channel.h` 提供 `socketpair()`、单帧发送和单帧接收接口。通道使用本地 `AF_UNIX/SOCK_SEQPACKET`，两个端点均设置 `CLOEXEC`。接收端检查完整数据包长度，超出接收缓冲区的消息会被丢弃并报告缓冲区不足。该 API 要求传入的 fd 确实是 SOCK_SEQPACKET 类型；PID 1 仍需负责创建通道、fork/exec 时的 fd 交接及关闭不需要的端点。
+`include/ninit/ipc_channel.h` 提供 `socketpair()`、单帧发送和单帧接收接口。通道使用本地 `AF_UNIX/SOCK_SEQPACKET`，两个端点均设置 `CLOEXEC` 和 `NONBLOCK`，避免 Manager 不响应时阻塞 PID 1；发送/接收遇到 `EAGAIN` 时返回 `NINIT_IPC_WOULD_BLOCK`，由上层事件循环稍后重试。接收端检查完整数据包长度，超出接收缓冲区的消息会被丢弃并报告缓冲区不足。该 API 要求传入的 fd 确实是 SOCK_SEQPACKET 类型；PID 1 仍需负责创建通道、fork/exec 时的 fd 交接及关闭不需要的端点。
 
 ## IPC 协议第一版
 
