@@ -294,4 +294,8 @@ PID 1 当前只输出 plan，不调用 apply；因此这轮代码不会在启动
 这个比较只证明当前进程与 PID 1 处于同一 mount namespace，**不证明该 namespace 是宿主机初始 namespace**。Linux 没有一个可在所有容器/权限模型下可靠使用的通用“宿主机 mount namespace”标识；因此 Ninit 不会仅凭 inode 常量、namespace 名称或容器类型宣称自己处于 host namespace。环境分类仍由独立的 PID namespace、运行时标记和管理员 override 决定。当前 PID 1 仍然只记录 mount plan，不会自动 apply。
 
 
+Mount Manager 对缺失的 `/proc`、`/sys`、`/dev` 目标使用 `lstat()` 检查：目标必须是实际目录，符号链接和非目录目标都标记为 conflict。显式 apply 会在每次 mount 前重新执行同一检查，防止规划后目标被替换成符号链接。这样可避免 mount 跟随目标路径中的最终符号链接而意外挂载到 root 外的位置。父路径组件的完整 `openat2(RESOLVE_BENEATH)` 约束尚未实现，因此运行时 root 应由可信的早期启动环境提供。
+
+能力快照还从根挂载记录的 mount options 字段读取 `ro`/`rw`，报告 `root_mount_read_only`。该字段目前仅用于准确描述根挂载状态，不会因为 root 为只读就一概阻止挂载：Linux 可以在只读根文件系统中挂载到预先存在的目录，最终仍由 namespace、权限和 mount syscall 决定是否成功。
+
 Mount Manager 还会从 mountinfo 检查根挂载点 `/` 的传播属性。若找不到根挂载记录，或根挂载带有 `shared:` propagation tag，则缺失的伪文件系统挂载目标会被标记为 `blocked`；apply 阶段也会重新检查。原因是直接在 shared mount tree 下创建挂载可能向 peer namespace 传播。Ninit 当前不会擅自把整个根挂载树改成 private，也不会在未审查传播语义前自动改变系统挂载拓扑。
