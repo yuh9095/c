@@ -170,8 +170,8 @@ main(void)
         snprintf(path, sizeof(path), "%s/sys", root);
         snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
         write_file(path,
-            "1 0 0:1 / / rw - ext4 /dev/root rw\\n"
-            "10 1 0:2 / /proc rw - proc proc rw\\n");
+            "1 0 0:1 / / rw - ext4 /dev/root rw\n"
+            "10 1 0:2 / /proc rw - proc proc rw\n");
         snprintf(path, sizeof(path), "%s/sys", root);
         assert(ninit_mount_manager_plan(root, &policy, &caps, &plan) == 0);
         assert(plan.entries[1].action == NINIT_MOUNT_APPLY);
