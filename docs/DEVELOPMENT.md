@@ -190,15 +190,12 @@ approach used by systemd's `detect_container()` and OpenRC's
 - `/run/systemd/container` and the inherited `container` environment value;
 - Podman and Docker marker files;
 - OpenVZ procfs indicators;
-- cgroup path indicators for Docker, Podman, Kubernetes, LXC and
-  systemd-nspawn. The detector parses the third `/proc/1/cgroup` field and
-  matches complete path components rather than searching controller names or
-  arbitrary substrings. Podman requires a `libpod-*` scope (a generic
-  `containers` directory is ambiguous); systemd-nspawn requires a
-  `machine-*` scope rather than `machine.slice` alone, which also appears on
-  ordinary systemd hosts. It scans all entries; conflicting container families
-  are retained as generic `OTHER` container evidence instead of selecting
-  whichever marker happened to appear first;
+- systemd-style evidence ordering: OpenVZ procfs indicators, WSL kernel
+  release, the `/run/host/container-manager` identification file, the PID 1
+  `container` environment variable, and runtime marker files. A `container`
+  environment value supplied for a non-PID-1 process is deliberately ignored;
+  cgroup path names are not used as container identity because they are not a
+  reliable systemd detection signal;
 - WSL indicators and, as a final PID-1 fallback, the nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT` relationship probe. Ninit first
   verifies that the opened handle is a PID namespace; only then is namespace
   evidence recorded. A visible parent proves the current PID namespace is
