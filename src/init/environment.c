@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static int
 make_path(char *buffer, size_t size, const char *root, const char *path)
