@@ -48,7 +48,7 @@ decode_mount_field(char *field)
 /* Returns 1 for a mount at path, 0 if absent, and -1 on read failure. */
 static int
 find_mount(const char *root, const char *path, char *filesystem,
-           size_t filesystem_size)
+           size_t filesystem_size, unsigned int *security_options)
 {
     char full[4096];
     char *line = NULL;
@@ -66,6 +66,7 @@ find_mount(const char *root, const char *path, char *filesystem,
         char *save = NULL;
         char *token;
         char *mountpoint = NULL;
+        char *mount_options = NULL;
         char *fstype = NULL;
         unsigned int field = 0;
 
@@ -74,13 +75,15 @@ find_mount(const char *root, const char *path, char *filesystem,
             field++;
             if (field == 5)
                 mountpoint = token;
+            else if (field == 6)
+                mount_options = token;
             if (strcmp(token, "-") == 0) {
                 fstype = strtok_r(NULL, " ", &save);
                 break;
             }
             token = strtok_r(NULL, " ", &save);
         }
-        if (mountpoint == NULL || fstype == NULL)
+        if (mountpoint == NULL || mount_options == NULL || fstype == NULL)
             continue;
         mountpoint[strcspn(mountpoint, "\r\n")] = '\0';
         fstype[strcspn(fstype, "\r\n")] = '\0';
@@ -94,6 +97,21 @@ find_mount(const char *root, const char *path, char *filesystem,
                 return -1;
             }
             memcpy(filesystem, fstype, length + 1);
+            if (security_options != NULL) {
+                char *option_save = NULL;
+                char *option;
+                *security_options = 0;
+                option = strtok_r(mount_options, ",", &option_save);
+                while (option != NULL) {
+                    if (strcmp(option, "nosuid") == 0)
+                        *security_options |= NINIT_MOUNT_OPTION_NOSUID;
+                    else if (strcmp(option, "nodev") == 0)
+                        *security_options |= NINIT_MOUNT_OPTION_NODEV;
+                    else if (strcmp(option, "noexec") == 0)
+                        *security_options |= NINIT_MOUNT_OPTION_NOEXEC;
+                    option = strtok_r(NULL, ",", &option_save);
+                }
+            }
             found = 1;
             break;
         }
@@ -173,14 +191,16 @@ ninit_mount_manager_plan(const char *root,
         char existing_fs[128];
         int mounted;
         int allowed;
+        unsigned int existing_options = 0;
 
         *entry = templates[i];
         plan->count++;
         mounted = find_mount(root, entry->path, existing_fs,
-                             sizeof(existing_fs));
+                             sizeof(existing_fs), &existing_options);
         if (mounted < 0)
             return -1;
         if (mounted) {
+            entry->existing_mount_options = existing_options;
             entry->action = strcmp(existing_fs, entry->filesystem) == 0 ?
                             NINIT_MOUNT_SKIP : NINIT_MOUNT_CONFLICT;
             continue;
@@ -266,7 +286,7 @@ ninit_mount_manager_apply(const char *root,
             }
         }
         mounted = find_mount(root, entry->path, existing_fs,
-                             sizeof(existing_fs));
+                             sizeof(existing_fs), NULL);
         if (mounted < 0)
             return -1;
         if (mounted) {
