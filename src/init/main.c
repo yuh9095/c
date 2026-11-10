@@ -199,6 +199,8 @@ main(int argc, char **argv)
         ninit_mount_manager_plan("/", &environment_policy,
                                  &environment_capabilities, &mount_plan) == 0) {
         size_t mount_index;
+        int have_mount_work = 0;
+
         for (mount_index = 0; mount_index < mount_plan.count; mount_index++) {
             const struct ninit_mount_entry *entry =
                 &mount_plan.entries[mount_index];
@@ -213,6 +215,19 @@ main(int argc, char **argv)
                      NINIT_MOUNT_OPTION_NODEV) ? "yes" : "no",
                     (entry->existing_mount_options &
                      NINIT_MOUNT_OPTION_NOEXEC) ? "yes" : "no");
+            if (entry->action == NINIT_MOUNT_APPLY)
+                have_mount_work = 1;
+        }
+
+        /*
+         * The environment policy is passed again at apply time. This is
+         * intentional: a stale host plan must not authorize mounts if the
+         * detected environment policy has become restrictive.
+         */
+        if (have_mount_work &&
+            ninit_mount_manager_apply("/", &environment_policy, &mount_plan,
+                                      NULL, NULL) < 0) {
+            perror("ninit-init: apply pseudo-filesystem mount plan");
         }
     } else {
         fprintf(stderr, "ninit-init: mount plan unavailable; no mount changes will be attempted\n");
