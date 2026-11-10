@@ -43,6 +43,7 @@ main(void)
 
     options.root = root;
     options.container_environment = NULL;
+    options.environment_override = NULL;
     options.is_pid1 = 1;
 
     /* A visible procfs with no container evidence is host-like. */
@@ -81,6 +82,21 @@ main(void)
     ninit_environment_get_policy(&environment, &policy);
     assert(policy.allow_mount_proc == 0);
     assert(policy.allow_host_shutdown == 0);
+
+
+    /* Explicit administrator override wins over detected markers. */
+    options.environment_override = "host";
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_HOST);
+    assert(environment.container == NINIT_CONTAINER_NONE);
+    assert(environment.evidence == NINIT_ENV_EVIDENCE_OVERRIDE);
+    options.environment_override = "container:docker";
+    assert(ninit_environment_detect(&options, &environment) == 0);
+    assert(environment.kind == NINIT_ENVIRONMENT_CONTAINER);
+    assert(environment.container == NINIT_CONTAINER_DOCKER);
+    options.environment_override = "invalid-value";
+    assert(ninit_environment_detect(&options, &environment) == -1);
+    options.environment_override = NULL;
 
     snprintf(path, sizeof(path), "%s/proc/1/cgroup", root); unlink(path);
     snprintf(path, sizeof(path), "%s/run/systemd", root); rmdir(path);
