@@ -129,8 +129,8 @@ main(void)
         char outside[512];
         snprintf(real_sys, sizeof(real_sys), "%s/sys-real", root);
         snprintf(outside, sizeof(outside), "%s/outside", root);
-        assert(rename((snprintf(path, sizeof(path), "%s/sys", root), path),
-                      real_sys) == 0);
+        snprintf(path, sizeof(path), "%s/sys", root);
+        assert(rename(path, real_sys) == 0);
         mkdir_path(outside);
         snprintf(path, sizeof(path), "%s/sys", root);
         assert(symlink(outside, path) == 0);
