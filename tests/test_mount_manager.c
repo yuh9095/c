@@ -283,7 +283,17 @@ main(void)
         assert(plan.entries[2].action == NINIT_MOUNT_BLOCKED);
     }
 
-    /* Restore a private root mount before stale-plan checks. */
+    /* A root becoming read-only after planning invalidates the plan. */
+    snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
+    write_file(path,
+        "1 0 0:1 / / ro - ext4 /dev/root ro\n"
+        "10 1 0:2 / /proc rw - proc proc rw\n");
+    errno = 0;
+    assert(ninit_mount_manager_apply(root, &plan, record_mount, &state) == -1);
+    assert(errno == EPERM);
+    assert(state.calls == 2);
+
+    /* Restore a private, writable root mount before stale-plan checks. */
     snprintf(path, sizeof(path), "%s/proc/self/mountinfo", root);
     write_file(path,
         "1 0 0:1 / / rw - ext4 /dev/root rw\n"
