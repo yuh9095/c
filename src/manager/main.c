@@ -62,7 +62,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
         ninit_job_manager_submit_stop(jobs, plan, 4, &stop_job_id) == 0)
         stop_submitted = 1;
     else if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
-        fprintf(stderr, "ninit-manager: SIGTERM broadcast failed: %s\\n",
+        fprintf(stderr, "ninit-manager: SIGTERM broadcast failed: %s\n",
                 strerror(errno));
 
     for (;;) {
@@ -81,7 +81,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
                     runtime, stop_job_id, NULL);
             } while (dispatched > 0);
             if (dispatched < 0)
-                fprintf(stderr, "ninit-manager: Stop Job dispatch failed: %s\\n",
+                fprintf(stderr, "ninit-manager: Stop Job dispatch failed: %s\n",
                         strerror(errno));
             if (ninit_job_manager_get_info(jobs, stop_job_id, &info) == 0 &&
                 (info.state == NINIT_JOB_SUCCEEDED ||
@@ -124,9 +124,9 @@ stop_service_children(struct ninit_service_runtime *runtime,
         if (result == 0 && !force_kill) {
             force_kill = 1;
             fprintf(stderr,
-                    "ninit-manager: service shutdown grace period expired; sending SIGKILL\\n");
+                    "ninit-manager: service shutdown grace period expired; sending SIGKILL\n");
             if (ninit_service_runtime_signal_all(runtime, SIGKILL) < 0)
-                fprintf(stderr, "ninit-manager: SIGKILL broadcast failed: %s\\n",
+                fprintf(stderr, "ninit-manager: SIGKILL broadcast failed: %s\n",
                         strerror(errno));
         }
 
@@ -135,7 +135,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
                 int check = ninit_service_runtime_check_exec(runtime, pids[i]);
                 if (check < 0 && errno != ECHILD && errno != EALREADY)
                     fprintf(stderr,
-                            "ninit-manager: service %ld exec cleanup: %s\\n",
+                            "ninit-manager: service %ld exec cleanup: %s\n",
                             (long) pids[i], strerror(errno));
             }
         }
