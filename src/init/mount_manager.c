@@ -12,6 +12,30 @@
 #include <unistd.h>
 
 static int
+has_dot_component(const char *path)
+{
+    const char *component;
+
+    if (path == NULL || path[0] != '/')
+        return 1;
+
+    component = path + 1;
+    while (*component != '\0') {
+        const char *end = strchr(component, '/');
+        size_t length = end == NULL ? strlen(component) :
+                                      (size_t) (end - component);
+
+        if ((length == 1 && component[0] == '.') ||
+            (length == 2 && component[0] == '.' && component[1] == '.'))
+            return 1;
+        if (end == NULL)
+            break;
+        component = end + 1;
+    }
+    return 0;
+}
+
+static int
 make_path(char *buffer, size_t size, const char *root, const char *path)
 {
     size_t root_length;
@@ -23,7 +47,8 @@ make_path(char *buffer, size_t size, const char *root, const char *path)
     }
     if (root == NULL)
         root = "/";
-    if (root[0] != '/') {
+    if (root[0] != '/' || has_dot_component(root) ||
+        has_dot_component(path)) {
         errno = EINVAL;
         return -1;
     }
