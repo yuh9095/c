@@ -191,7 +191,8 @@ approach used by systemd's `detect_container()` and OpenRC's
 - Podman and Docker marker files;
 - OpenVZ procfs indicators;
 - systemd-style evidence ordering: OpenVZ procfs indicators, WSL kernel
-  release, the `/run/host/container-manager` identification file, the PID 1
+  release, Proot's `TracerPid`/tracer command name, the
+  `/run/host/container-manager` identification file, the PID 1
   `container` environment variable, and runtime marker files. A `container`
   environment value supplied for a non-PID-1 process is deliberately ignored;
   cgroup path names are not used as container identity because they are not a
