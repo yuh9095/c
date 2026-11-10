@@ -83,7 +83,7 @@ unit_free(struct ninit_unit *unit)
 
 static int
 copy_string_array(char ***destination, const char *const *source,
-                  size_t count)
+                  size_t count, int validate_names)
 {
     size_t i;
     char **items;
@@ -101,7 +101,7 @@ copy_string_array(char ***destination, const char *const *source,
         return -1;
     }
     for (i = 0; i < count; ++i) {
-        if (!valid_name(source[i])) {
+        if (source[i] == NULL || (validate_names && !valid_name(source[i]))) {
             free_string_array(items, i);
             errno = EINVAL;
             return -1;
@@ -135,15 +135,15 @@ unit_copy(const struct ninit_unit_spec *spec)
     if (unit->name == NULL ||
         (spec->description != NULL && unit->description == NULL) ||
         copy_string_array(&unit->exec_start_argv, spec->exec_start_argv,
-                          spec->exec_start_argc) != 0 ||
+                          spec->exec_start_argc, 0) != 0 ||
         copy_string_array(&unit->requires, spec->requires,
-                          spec->requires_count) != 0 ||
+                          spec->requires_count, 1) != 0 ||
         copy_string_array(&unit->wants, spec->wants,
-                          spec->wants_count) != 0 ||
+                          spec->wants_count, 1) != 0 ||
         copy_string_array(&unit->after, spec->after,
-                          spec->after_count) != 0 ||
+                          spec->after_count, 1) != 0 ||
         copy_string_array(&unit->before, spec->before,
-                          spec->before_count) != 0) {
+                          spec->before_count, 1) != 0) {
         unit_free(unit);
         return NULL;
     }
@@ -198,7 +198,9 @@ ninit_unit_manager_add(struct ninit_unit_manager *manager,
         (spec->type != NINIT_UNIT_SERVICE && spec->type != NINIT_UNIT_TARGET) ||
         (spec->type == NINIT_UNIT_TARGET && spec->exec_start_argc != 0) ||
         (spec->type == NINIT_UNIT_SERVICE &&
-         (spec->exec_start_argv == NULL || spec->exec_start_argc == 0))) {
+         (spec->exec_start_argv == NULL || spec->exec_start_argc == 0 ||
+          spec->exec_start_argv[0] == NULL ||
+          spec->exec_start_argv[0][0] == '\\0'))) {
         errno = EINVAL;
         return -1;
     }
