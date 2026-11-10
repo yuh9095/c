@@ -222,12 +222,17 @@ explicit HOST override enables the host policy; even then, its permission
 flags are not proof that an operation is permitted, and every mount operation
 must still check existing mounts and handle kernel errors.
 
-PID 1 currently performs detection before console setup and reports the
-selected environment. The policy is not yet connected to early mount setup,
-service keyword filtering, or reboot/poweroff syscalls. The next work is to
-add an OpenRC-style administrator override (`rc_sys` equivalent), broaden
-Linux-VServer/UML and namespace/chroot detection, then make mount and shutdown
-operations consume the policy. Do not treat the current detector as a complete
+PID 1 performs detection before console setup and consumes the policy
+for early pseudo-filesystem mount setup. `ninit_environment_authorize_host_shutdown()`
+is the common authorization gate for host reboot/poweroff callers: it requires
+an explicitly permissive environment policy plus an observable effective
+`CAP_SYS_BOOT`. Container, WSL guest, and UNKNOWN policies deny host-level
+shutdown. PID 1 reports this gate at startup; the current main loop does not
+issue a reboot/poweroff syscall, and signal-driven shutdown only stops the
+Manager. A future syscall path must re-probe capabilities immediately before
+the operation and handle syscall errors; the startup snapshot is diagnostic,
+not a durable authorization token. Service keyword filtering and guest-local
+shutdown remain future work. Do not treat the current detector as a complete
 security boundary or assume that a detected container name proves a specific
 capability set.
 
