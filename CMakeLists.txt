@@ -17,6 +17,7 @@ option(NINIT_BUILD_TESTS "Build Ninit tests" ON)
 
 add_library(ninit-common STATIC
     src/common/log.c
+    src/common/ipc_protocol.c
 )
 target_include_directories(ninit-common
     PUBLIC
@@ -45,4 +46,9 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-log PRIVATE ninit-common)
     target_compile_options(test-log PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME log-level-names COMMAND test-log)
+
+    add_executable(test-ipc-protocol tests/test_ipc_protocol.c)
+    target_link_libraries(test-ipc-protocol PRIVATE ninit-common)
+    target_compile_options(test-ipc-protocol PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ipc-protocol COMMAND test-ipc-protocol)
 endif()
