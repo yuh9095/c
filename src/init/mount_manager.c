@@ -540,6 +540,46 @@ ninit_mount_manager_apply(const char *root,
     return 0;
 }
 
+int
+ninit_mount_manager_apply_report(
+    const char *root, const struct ninit_environment_policy *policy,
+    const struct ninit_mount_plan *plan, ninit_mount_callback callback,
+    void *userdata, struct ninit_mount_result *results, size_t result_count)
+{
+    struct ninit_mount_plan single;
+    size_t i;
+    int failures = 0;
+
+    if (policy == NULL || plan == NULL || results == NULL ||
+        plan->count != NINIT_MOUNT_PLAN_COUNT ||
+        result_count < plan->count) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    for (i = 0; i < plan->count; i++) {
+        size_t j;
+
+        results[i].target = plan->entries[i].target;
+        results[i].action = plan->entries[i].action;
+        results[i].error_number = 0;
+        if (plan->entries[i].action != NINIT_MOUNT_APPLY)
+            continue;
+
+        single = *plan;
+        for (j = 0; j < single.count; j++) {
+            if (j != i)
+                single.entries[j].action = NINIT_MOUNT_SKIP;
+        }
+        if (ninit_mount_manager_apply(root, policy, &single,
+                                      callback, userdata) < 0) {
+            results[i].error_number = errno != 0 ? errno : EIO;
+            failures++;
+        }
+    }
+    return failures;
+}
+
 enum ninit_mount_error_class
 ninit_mount_manager_classify_error(int error_number)
 {
