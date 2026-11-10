@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
@@ -216,6 +217,65 @@ ninit_pid1_event_source_drain(
         }
         return -1;
     }
+}
+
+
+int
+ninit_pid1_event_source_wait(
+    struct ninit_pid1_event_source *source,
+    int timeout_ms,
+    ninit_pid1_signal_callback signal_callback,
+    void *signal_userdata,
+    ninit_child_exit_callback child_callback,
+    void *child_userdata)
+{
+    struct pollfd descriptor;
+    int poll_result;
+    int signal_count;
+    int child_count;
+    int saved_errno = 0;
+
+    if (source == NULL || source != active_source ||
+        source->read_fd < 0 || timeout_ms < -1) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    descriptor.fd = source->read_fd;
+    descriptor.events = POLLIN;
+    descriptor.revents = 0;
+
+    poll_result = poll(&descriptor, 1, timeout_ms);
+    if (poll_result < 0 && errno != EINTR) {
+        return -1;
+    }
+    if (poll_result > 0 &&
+        (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+        errno = EIO;
+        return -1;
+    }
+
+    signal_count = ninit_pid1_event_source_drain(
+        source, signal_callback, signal_userdata);
+    if (signal_count < 0) {
+        saved_errno = errno;
+    }
+
+    /*
+     * Always reap after a wakeup (including EINTR/timeout). A full
+     * nonblocking self-pipe may have dropped a redundant SIGCHLD write;
+     * waitpid() is the authoritative source of child exit state.
+     */
+    child_count = ninit_pid1_reap_children(child_callback, child_userdata);
+    if (child_count < 0 && saved_errno == 0) {
+        saved_errno = errno;
+    }
+
+    if (saved_errno != 0) {
+        errno = saved_errno;
+        return -1;
+    }
+    return signal_count + child_count;
 }
 
 void
