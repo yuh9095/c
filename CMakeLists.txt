@@ -69,10 +69,15 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_compile_options(test-ipc-channel PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ipc-channel COMMAND test-ipc-channel)
 
-    add_executable(test-pid1-runtime tests/test_pid1_runtime.c tests/test_pid1_events.c)
+    add_executable(test-pid1-runtime tests/test_pid1_runtime.c)
     target_link_libraries(test-pid1-runtime PRIVATE ninit-init)
     target_compile_options(test-pid1-runtime PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME pid1-runtime COMMAND test-pid1-runtime)
+
+    add_executable(test-pid1-events tests/test_pid1_events.c)
+    target_link_libraries(test-pid1-events PRIVATE ninit-init)
+    target_compile_options(test-pid1-events PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME pid1-events COMMAND test-pid1-events)
 
     add_executable(test-manager-spawn tests/test_manager_spawn.c)
     target_link_libraries(test-manager-spawn PRIVATE ninit-init)
