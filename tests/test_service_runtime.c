@@ -5,6 +5,7 @@
 #include <ninit/dependency_plan.h>
 
 #include <assert.h>
+#include <poll.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -26,6 +27,9 @@ main(void)
     int result;
     int status;
     int attempts;
+    struct pollfd exec_poll;
+    pid_t pending_pid;
+    int pending_fd;
 
     assert(units != NULL && jobs != NULL);
     memset(&spec, 0, sizeof(spec));
@@ -42,16 +46,25 @@ main(void)
 
     assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
     assert(pid > 0);
-    assert(ninit_service_runtime_exec_fd(runtime, pid) >= 0);
-    for (attempts = 0; attempts < 1000; ++attempts) {
-        result = ninit_service_runtime_check_exec(runtime, pid);
-        if (result != 0) break;
-        {
-            struct timespec delay = { 0, 1000000L };
-            (void) nanosleep(&delay, NULL);
-        }
-    }
+    assert(ninit_service_runtime_exec_pending_count(runtime) == 1);
+    assert(ninit_service_runtime_exec_pending_at(
+               runtime, 0, &pending_pid, &pending_fd) == 0);
+    assert(pending_pid == pid && pending_fd >= 0);
+    assert(ninit_service_runtime_exec_fd(runtime, pid) == pending_fd);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    exec_poll.revents = 0;
+    do {
+        result = poll(&exec_poll, 1, 3000);
+    } while (result < 0 && errno == EINTR);
     assert(result == 1);
+    assert((exec_poll.revents & (POLLIN | POLLHUP)) != 0);
+    result = ninit_service_runtime_check_exec(runtime, pid);
+    assert(result == 1);
+    assert(ninit_service_runtime_exec_pending_count(runtime) == 0);
+    assert(ninit_service_runtime_exec_pending_at(
+               runtime, 0, &pending_pid, &pending_fd) == -1);
+    assert(errno == ERANGE);
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_SUCCEEDED);
     assert(info.completed_count == 1);
