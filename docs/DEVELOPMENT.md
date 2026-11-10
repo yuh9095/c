@@ -202,7 +202,7 @@ approach used by systemd's `detect_container()` and OpenRC's
   marker files and otherwise classifies it as `OTHER`;
 - cgroup path names are deliberately not used to infer a container family;
   they are not a reliable systemd container identity signal;
-- as a final PID-1 fallback, Ninit uses nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT`
+- as a final fallback, Ninit uses nsfs `NS_GET_NSTYPE`/`NS_GET_PARENT`
   to recognize a verifiably nested PID namespace. `EPERM`/`ENOTTY` is
   inconclusive and remains UNKNOWN rather than comparing inode constants.
 
