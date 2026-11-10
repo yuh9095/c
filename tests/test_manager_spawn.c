@@ -35,7 +35,7 @@ main(int argc, char **argv)
                     directory) > 0);
     unit_file = fopen(unit_path, "w");
     assert(unit_file != NULL);
-    assert(fputs("[Unit]\\nDescription=Test default target\\n[Target]\\n",
+    assert(fputs("[Unit]\nDescription=Test default target\n[Target]\n",
                  unit_file) >= 0);
     assert(fclose(unit_file) == 0);
     assert(ninit_manager_start_with_config(argv[1], directory,
