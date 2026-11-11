@@ -46,6 +46,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
 {
     uint64_t stop_job_id = 0;
     int stop_submitted = 0;
+    int term_broadcast = 0;
     int force_kill = 0;
 
     if (runtime == NULL || reaper == NULL)
@@ -71,7 +72,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
         pid_t *pids = count == 0 ? NULL : calloc(count, sizeof(*pids));
         size_t i;
         int result;
-        int timeout_ms = force_kill ? -1 : 5000;
+        int timeout_ms = force_kill ? -1 : (term_broadcast ? 5000 : 30000);
         struct ninit_job_info info;
 
         if (stop_submitted) {
@@ -100,9 +101,19 @@ stop_service_children(struct ninit_service_runtime *runtime,
             if (ninit_job_manager_get_info(jobs, stop_job_id, &info) == 0 &&
                 (info.state == NINIT_JOB_SUCCEEDED ||
                  info.state == NINIT_JOB_FAILED ||
-                 info.state == NINIT_JOB_CANCELLED) &&
-                ninit_service_runtime_tracked_count(runtime) == 0)
-                break;
+                 info.state == NINIT_JOB_CANCELLED)) {
+                if (ninit_service_runtime_tracked_count(runtime) == 0)
+                    break;
+                if (!term_broadcast) {
+                    fprintf(stderr,
+                            "ninit-manager: sending final SIGTERM to services excluded from ordered stop\n");
+                    if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+                        fprintf(stderr,
+                                "ninit-manager: final SIGTERM broadcast failed: %s\n",
+                                strerror(errno));
+                    term_broadcast = 1;
+                }
+            }
         }
 
         if (ninit_service_runtime_tracked_count(runtime) == 0)
@@ -135,10 +146,17 @@ stop_service_children(struct ninit_service_runtime *runtime,
             free(fds);
             return -1;
         }
-        if (result == 0 && !force_kill) {
+        if (result == 0 && !term_broadcast) {
+            term_broadcast = 1;
+            fprintf(stderr,
+                    "ninit-manager: stop phase timed out; sending SIGTERM to remaining services\n");
+            if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+                fprintf(stderr, "ninit-manager: SIGTERM broadcast failed: %s\n",
+                        strerror(errno));
+        } else if (result == 0 && !force_kill) {
             force_kill = 1;
             fprintf(stderr,
-                    "ninit-manager: service shutdown grace period expired; sending SIGKILL\n");
+                    "ninit-manager: final service grace period expired; sending SIGKILL\n");
             if (ninit_service_runtime_signal_all(runtime, SIGKILL) < 0)
                 fprintf(stderr, "ninit-manager: SIGKILL broadcast failed: %s\n",
                         strerror(errno));
