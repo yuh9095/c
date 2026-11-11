@@ -35,6 +35,7 @@ struct ninit_unit_spec {
     int oneshot;
     int keyword_no_shutdown;
     int keyword_no_stop;
+    unsigned int timeout_stop_sec;
 };
 
 /* Unit objects are owned by the manager and remain valid until removal/destruction. */
@@ -57,6 +58,7 @@ struct ninit_unit {
     int oneshot;
     int keyword_no_shutdown;
     int keyword_no_stop;
+    unsigned int timeout_stop_sec;
 };
 
 #ifdef __cplusplus
