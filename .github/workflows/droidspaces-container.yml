@@ -1,0 +1,196 @@
+name: Droidspaces Linux container integration
+
+on:
+  push:
+    branches:
+      - bootstrap/project-skeleton
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: droidspaces-linux-${{ github.ref }}
+  # New commits supersede stale container integration runs.
+  cancel-in-progress: true
+
+jobs:
+  droidspaces-linux:
+    # Ordinary ephemeral GitHub-hosted VM; Droidspaces runs on this Linux host.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install host prerequisites
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates xz-utils util-linux
+
+      - name: Install Droidspaces Linux backend
+        env:
+          DROIDSPACES_VERSION: "7.2.0"
+          DROIDSPACES_COMMIT: "cdadb9eb"
+        run: |
+          set -Eeuo pipefail
+          archive="droidspaces-v${DROIDSPACES_VERSION}-${DROIDSPACES_COMMIT}.tar.gz"
+          base="https://github.com/ravindu644/Droidspaces-OSS/releases/download/v${DROIDSPACES_VERSION}"
+
+          curl --fail --show-error --location --retry 3 \
+            "${base}/${archive}" -o "${archive}"
+          curl --fail --show-error --location --retry 3 \
+            "${base}/SHA256SUMS" -o SHA256SUMS
+          grep "  ${archive}$" SHA256SUMS | sha256sum --check -
+
+          tar -xzf "${archive}"
+          binary="$(find . -type f -path '*/x86_64/droidspaces' -print -quit)"
+          test -n "$binary"
+          sudo install -D -m 0755 "$binary" /usr/local/bin/droidspaces
+
+          sudo droidspaces version
+          sudo droidspaces check
+
+      - name: Download a prebuilt Ubuntu rootfs
+        env:
+          ROOTFS: ${{ runner.temp }}/ninit-droidspaces-rootfs
+        run: |
+          set -Eeuo pipefail
+
+          # Droidspaces' Linux guide recommends the prebuilt LXC image server.
+          # Select the newest published Ubuntu Noble amd64/default image.
+          index="https://images.linuxcontainers.org/images/ubuntu/noble/amd64/default/"
+          curl --fail --show-error --location --retry 3 "$index" -o rootfs-index.html
+          latest="$(python3 - rootfs-index.html <<'PY'
+          import html
+          import re
+          import sys
+          from urllib.parse import unquote
+
+          page = open(sys.argv[1], encoding="utf-8").read()
+          hrefs = re.findall(r'href="([^"]+/)"', page)
+          versions = []
+          for href in hrefs:
+              decoded = unquote(html.unescape(href))
+              if re.fullmatch(r"\d{8}_\d{2}:\d{2}/", decoded):
+                  versions.append(decoded)
+          if not versions:
+              raise SystemExit("No dated Ubuntu Noble rootfs image found")
+          print(sorted(versions)[-1])
+          PY
+          )"
+
+          archive="${index}${latest}rootfs.tar.xz"
+          curl --fail --show-error --location --retry 3 "$archive" -o rootfs.tar.xz
+          sudo mkdir -p "$ROOTFS"
+          # Preserve root ownership, permissions and special mode bits.
+          sudo tar --numeric-owner --same-owner -xpf rootfs.tar.xz -C "$ROOTFS"
+
+          test -x "$ROOTFS/sbin/init"
+          test -x "$ROOTFS/usr/bin/apt-get"
+          echo "Using prebuilt rootfs: ${archive}"
+
+      - name: Build Ninit inside Droidspaces, then boot it as PID 1
+        env:
+          ROOTFS: ${{ runner.temp }}/ninit-droidspaces-rootfs
+          CONTAINER_NAME: ninit-ci
+        run: |
+          set -Eeuo pipefail
+
+          cleanup() {
+            sudo droidspaces --name="$CONTAINER_NAME" stop >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # The bind-mount destination must exist in the guest rootfs.
+          sudo mkdir -p "$ROOTFS$GITHUB_WORKSPACE"
+
+          # Phase 1: boot the rootfs with its distro-provided init so we can
+          # install the toolchain and compile Ninit from the mounted checkout.
+          sudo droidspaces \
+            --name="$CONTAINER_NAME" \
+            --rootfs="$ROOTFS" \
+            --allow-sandboxing \
+            --net=host \
+            --bind-mount="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            start
+
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            apt-get update
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            apt-get install -y --no-install-recommends \
+              build-essential cmake ninja-build util-linux
+
+          # Compile and install from inside the guest. The workspace variable
+          # is explicitly passed; host GitHub variables are not inherited.
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            env NINIT_WORKSPACE="$GITHUB_WORKSPACE" sh -ec '
+              test -d "$NINIT_WORKSPACE"
+              mountpoint "$NINIT_WORKSPACE"
+              cmake -S "$NINIT_WORKSPACE" -B "$NINIT_WORKSPACE/build" -G Ninja \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug
+              cmake --build "$NINIT_WORKSPACE/build" --parallel 2
+              cmake --install "$NINIT_WORKSPACE/build" --prefix /usr
+              test -x /usr/bin/ninit-init
+              test -x /usr/bin/ninit-manager
+              test -x /usr/bin/ninitctl
+            '
+
+          # Configure Ninit's boot targets in the persistent guest rootfs.
+          sudo mkdir -p "$ROOTFS/etc/ninit/units"
+          for target in sysinit boot default; do
+            sudo tee "$ROOTFS/etc/ninit/units/$target.target" >/dev/null <<EOF
+          [Unit]
+          Description=Ninit CI $target target
+          [Target]
+          EOF
+          done
+
+          # Phase 2: stop the distro init and start the same rootfs with the
+          # freshly compiled Ninit binary as the actual container PID 1.
+          sudo droidspaces --name="$CONTAINER_NAME" stop
+          sudo droidspaces \
+            --name="$CONTAINER_NAME" \
+            --init=/usr/bin/ninit-init \
+            --allow-sandboxing \
+            --net=host \
+            --bind-mount="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
+            start
+
+          # Explicitly pass the workspace path into the guest command.
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            env NINIT_WORKSPACE="$GITHUB_WORKSPACE" sh -ec '
+              printf "Container PID 1 executable: "
+              readlink /proc/1/exe
+              test "$(readlink /proc/1/exe)" = "/usr/bin/ninit-init"
+              printf "Container PID 1 command: "
+              tr "\000" " " </proc/1/cmdline; echo
+              test -d "$NINIT_WORKSPACE"
+              test -x "$NINIT_WORKSPACE/build/ninit-manager"
+              printf "Workspace mount: "
+              mountpoint "$NINIT_WORKSPACE"
+            '
+
+          # The namespace test is mandatory: inability to create the nested
+          # namespaces must fail this integration job rather than skip it.
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            env NINIT_WORKSPACE="$GITHUB_WORKSPACE" \
+                NINIT_REQUIRE_PID_NAMESPACE_TEST=1 \
+            ctest --test-dir "$GITHUB_WORKSPACE/build" \
+              --output-on-failure --timeout 60
+
+          echo "Droidspaces container test completed successfully."
+
+      - name: Show host and container diagnostics
+        if: always()
+        run: |
+          set +e
+          uname -a
+          sudo droidspaces show || true
+          sudo droidspaces --name=ninit-ci info || true
