@@ -49,7 +49,7 @@ get_u64(const unsigned char *p)
 static int
 valid_type(uint16_t type)
 {
-    return type >= NINIT_IPC_MSG_HELLO && type <= NINIT_IPC_MSG_ERROR;
+    return type >= NINIT_IPC_MSG_HELLO && type <= NINIT_IPC_MSG_SHUTDOWN;
 }
 
 int
