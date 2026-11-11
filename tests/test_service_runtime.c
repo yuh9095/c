@@ -298,12 +298,17 @@ main(void)
     assert(ninit_service_runtime_check_exec(runtime, stop_pid) == 1);
     assert(ninit_service_runtime_stop_timeout_ms(runtime) >= 0);
     assert(poll(NULL, 0, 40) == 0);
+    /* First deadline sends TERM to both groups and starts the grace period. */
+    assert(ninit_service_runtime_expire_stop_timeouts(runtime) == 1);
+    assert(kill(pid, 0) == 0);
+    assert(poll(NULL, 0, 40) == 0);
+    /* The second deadline escalates the still-stopped main service to KILL. */
     assert(ninit_service_runtime_expire_stop_timeouts(runtime) == 1);
     assert(waitpid(pid, &status, 0) == pid);
     assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
     assert(waitpid(stop_pid, &status, 0) == stop_pid);
-    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
     assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
     assert(ninit_service_runtime_tracked_count(runtime) == 0);
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
