@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <ninit/service_executor.h>
 
@@ -24,7 +25,9 @@ struct service_process {
     int stop_child_exited;
     int stop_wait_status;
     int stop_success;
+    int stop_error;
     int stop_signal_sent;
+    uint64_t stop_deadline_ms;
     int exec_confirmed;
     int start_completion_done;
     int child_exited;
@@ -87,9 +90,11 @@ complete_stop_if_ready(struct ninit_service_runtime *runtime,
     if (ninit_job_manager_complete(runtime->jobs, process->stop_job_id,
                                    process->stop_plan_index,
                                    process->stop_success,
-                                   process->stop_success ? 0 : EIO) < 0)
+                                   process->stop_success ? 0 :
+                                   (process->stop_error != 0 ? process->stop_error : EIO)) < 0)
         return -1;
     process->stop_requested = 0;
+    process->stop_deadline_ms = 0;
     return 1;
 }
 
@@ -144,6 +149,59 @@ reserve_process(struct ninit_service_runtime *runtime)
     runtime->processes = items;
     runtime->capacity = capacity;
     return 0;
+}
+
+static uint64_t
+monotonic_milliseconds(void)
+{
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+        return 0;
+    return (uint64_t)now.tv_sec * 1000U + (uint64_t)now.tv_nsec / 1000000U;
+}
+
+int
+ninit_service_runtime_stop_timeout_ms(const struct ninit_service_runtime *runtime)
+{
+    uint64_t now, nearest = UINT64_MAX;
+    size_t i;
+    if (runtime == NULL) { errno = EINVAL; return -1; }
+    now = monotonic_milliseconds();
+    if (now == 0) return -1;
+    for (i = 0; i < runtime->count; ++i) {
+        uint64_t deadline = runtime->processes[i].stop_deadline_ms;
+        if (deadline != 0 && deadline < nearest) nearest = deadline;
+    }
+    if (nearest == UINT64_MAX) return -1;
+    if (nearest <= now) return 0;
+    if (nearest - now > 2147483647U) return 2147483647;
+    return (int)(nearest - now);
+}
+
+int
+ninit_service_runtime_expire_stop_timeouts(struct ninit_service_runtime *runtime)
+{
+    uint64_t now;
+    size_t i;
+    int expired = 0;
+    if (runtime == NULL) { errno = EINVAL; return -1; }
+    now = monotonic_milliseconds();
+    if (now == 0) return -1;
+    for (i = 0; i < runtime->count; ++i) {
+        struct service_process *p = &runtime->processes[i];
+        if (p->stop_deadline_ms == 0 || p->stop_deadline_ms > now)
+            continue;
+        p->stop_deadline_ms = 0;
+        p->stop_success = 0;
+        p->stop_error = ETIMEDOUT;
+        if (p->stop_pid > 0 && kill(-p->stop_pid, SIGKILL) < 0 && errno != ESRCH)
+            return -1;
+        if (kill(-p->pid, SIGKILL) < 0 && errno != ESRCH)
+            return -1;
+        p->stop_signal_sent = 1;
+        ++expired;
+    }
+    return expired;
 }
 
 struct ninit_service_runtime *
@@ -261,6 +319,20 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
             }
             process->stop_requested = 1;
             process->stop_success = 1;
+            process->stop_error = 0;
+            {
+                uint64_t now = monotonic_milliseconds();
+                unsigned int timeout = unit->timeout_stop_msec != 0 ?
+                                       unit->timeout_stop_msec : 30000U;
+                if (now == 0 || UINT64_MAX - now < timeout) {
+                    process->stop_requested = 0;
+                    (void)ninit_job_manager_complete(runtime->jobs, job_id,
+                                                     plan_index, 0, EIO);
+                    errno = EIO;
+                    return -1;
+                }
+                process->stop_deadline_ms = now + timeout;
+            }
             process->stop_job_id = job_id;
             process->stop_plan_index = plan_index;
             if (unit->exec_stop_argc != 0) {
