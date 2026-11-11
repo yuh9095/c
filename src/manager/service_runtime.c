@@ -106,7 +106,7 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
         WEXITSTATUS(process->stop_wait_status) != 0)
         process->stop_success = 0;
     if (!process->stop_signal_sent) {
-        if (kill(process->pid, SIGTERM) == 0 || errno == ESRCH) {
+        if (kill(-process->pid, SIGTERM) == 0 || errno == ESRCH) {
             process->stop_signal_sent = 1;
         } else {
             process->stop_success = 0;
@@ -170,7 +170,7 @@ ninit_service_runtime_signal_all(struct ninit_service_runtime *runtime,
                           runtime->processes[i].stop_pid };
         size_t j;
         for (j = 0; j < 2; ++j)
-            if (pids[j] > 0 && kill(pids[j], signal_number) < 0 &&
+            if (pids[j] > 0 && kill(-pids[j], signal_number) < 0 &&
                 errno != ESRCH && first_error == 0)
                 first_error = errno;
     }
@@ -193,10 +193,10 @@ ninit_service_runtime_signal_job(struct ninit_service_runtime *runtime,
         struct service_process *process = &runtime->processes[i];
         pid_t pid = process->job_id == job_id ? process->pid : -1;
         pid_t stop_pid = process->stop_job_id == job_id ? process->stop_pid : -1;
-        if (pid > 0 && kill(pid, signal_number) < 0 && errno != ESRCH &&
+        if (pid > 0 && kill(-pid, signal_number) < 0 && errno != ESRCH &&
             first_error == 0)
             first_error = errno;
-        if (stop_pid > 0 && kill(stop_pid, signal_number) < 0 &&
+        if (stop_pid > 0 && kill(-stop_pid, signal_number) < 0 &&
             errno != ESRCH && first_error == 0)
             first_error = errno;
     }
