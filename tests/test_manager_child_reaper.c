@@ -116,6 +116,37 @@ main(void)
         assert(ninit_manager_child_reaper_drain(reaper, NULL, NULL) == 0);
     }
 
+    /*
+     * Final manager cleanup can enumerate adopted children and signal their
+     * process groups, not merely the direct child PID.
+     */
+    {
+        pid_t survivor = fork();
+        assert(survivor >= 0);
+        if (survivor == 0) {
+            if (setpgid(0, 0) < 0)
+                _exit(91);
+            for (;;)
+                pause();
+        }
+        result.expected = survivor;
+        result.called = 0;
+        assert(ninit_manager_child_reaper_has_children(reaper) == 1);
+        assert(ninit_manager_child_reaper_signal_children(
+                   reaper, SIGTERM) >= 1);
+        descriptor.revents = 0;
+        do {
+            poll_result = poll(&descriptor, 1, 3000);
+        } while (poll_result < 0 && errno == EINTR);
+        assert(poll_result == 1);
+        assert(ninit_manager_child_reaper_drain(
+                   reaper, record_exit, &result) == 1);
+        assert(result.called == 1);
+        assert(WIFSIGNALED(result.status));
+        assert(WTERMSIG(result.status) == SIGTERM);
+        assert(ninit_manager_child_reaper_has_children(reaper) == 0);
+    }
+
     ninit_manager_child_reaper_destroy(reaper);
     return 0;
 }
