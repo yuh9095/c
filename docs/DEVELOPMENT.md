@@ -408,3 +408,8 @@ Mount Manager 还会从 mountinfo 检查根挂载点 `/` 的传播属性。若�
 PID 1 发现 Manager 子进程退出后，会先清理被重新托管到 PID 1 的遗留子进程，再进入 Manager 重启退避流程。清理器通过 /proc/self/task/<pid>/children 枚举直接子进程，只向当前直接子进程 PID 发送 SIGTERM，宽限期到期后发送 SIGKILL，并持续回收、重新枚举，直到没有遗留子进程。不会对通用 adopted child 使用负 PGID 广播信号，避免误杀共享进程组的无关进程；父进程退出后，其后代重新托管到 PID 1，再由下一轮逐个发现和清理。若 procfs 子进程清单不可用或清理失败，PID 1 不会直接重启 Manager，以免新旧服务树重叠。
 
  test_pid1_runtime 通过 subreaper 模拟 PID 1：Manager 被 SIGKILL 后，服务进程及其后台孙进程被重新托管；后台孙进程显式忽略 SIGTERM。测试要求清理器经过宽限期后以 SIGKILL 清除整个服务进程组，并确认两个 PID 均已被回收。该策略逐层清理，不依赖对整个进程组广播信号。该测试覆盖进程树清理算法，但仍不是在真实 PID namespace 中启动完整 ninit-init 的端到端崩溃测试。
+
+
+### 共享进程组保护回归测试
+
+PID 1 遗留进程清理不能假定 adopted child 独占其 process group。test-pid1-runtime 额外创建一个与服务 leader 共享 PGID、但不属于 Manager 子树的无关进程；清理结束后验证该进程仍存活，再由测试主动回收。此用例用于防止将逐 PID 清理回退为 `kill(-pgid, ...)` 广播。
