@@ -161,7 +161,7 @@ main(void)
     assert(WIFEXITED(status) && WEXITSTATUS(status) == 1);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
-    assert(info.state == NINIT_JOB_FAILED && info.error_code == ECHILD);
+    assert(info.state == NINIT_JOB_FAILED && info.error_code == EIO);
 
     ninit_service_runtime_destroy(runtime);
     ninit_dependency_plan_destroy(plan);
