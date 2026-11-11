@@ -105,7 +105,7 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
     struct timespec now;
 
     if (context->supervisor->process.pid != pid) {
-        /* PID 1 currently owns only the manager process. */
+        /* Service descendants are handled by the post-Manager cleanup path. */
         return;
     }
 
