@@ -180,7 +180,7 @@ An absent `shutdown.target` is backward-compatible and simply omits this phase.
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。Stop Job 会按逆依赖顺序定位已跟踪的 Service，发送 SIGTERM，并将 Stop Job 项关联到进程记录；只有 child-exit 已由统一 reaper 回收、且 exec handshake 已处理后，才完成该停止项。未运行的 Service 和 Target 可立即完成停止项。Manager 退出时优先提交 Stop Job，等待服务退出；5 秒宽限期后仍存活的进程会收到 SIGKILL，随后仍通过 exec handshake 与统一 child reaper 清理。若没有可用的启动 plan，则使用 SIGTERM 广播和相同的宽限期/强制回收路径。该机制尚未提供 Unit 自定义 TimeoutStopSec、进程组/cgroup 管理或 Restart 策略。ExecStop 通过 exec-error pipe 确认 exec 成功，并等待辅助进程退出；只有退出码为 0 才视为停止命令成功。无论 ExecStop exec 失败还是非零/信号退出，Runtime 都会继续向主服务发送 SIGTERM、等待主服务回收，同时将 Stop Job 标记失败。辅助进程与主服务的退出事件可按任意先后顺序到达，由统一 Child Reaper 和 Runtime 状态机汇合处理。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。Stop Job 会按逆依赖顺序定位已跟踪的 Service，发送 SIGTERM，并将 Stop Job 项关联到进程记录；只有 child-exit 已由统一 reaper 回收、且 exec handshake 已处理后，才完成该停止项。未运行的 Service 和 Target 可立即完成停止项。Manager 退出时优先提交 Stop Job，等待服务退出；5 秒宽限期后仍存活的进程会收到 SIGKILL，随后仍通过 exec handshake 与统一 child reaper 清理。若没有可用的启动 plan，则使用 SIGTERM 广播和相同的宽限期/强制回收路径。该机制尚未提供 Unit 自定义 TimeoutStopSec、进程组/cgroup 管理或 Restart 策略。ExecStop 通过 exec-error pipe 确认 exec 成功，并等待辅助进程退出；只有退出码为 0 才视为停止命令成功。无论 ExecStop exec 失败还是非零/信号退出，Runtime 都会继续向主服务发送 SIGTERM、等待主服务回收，同时将 Stop Job 标记失败。辅助进程与主服务的退出事件可按任意先后顺序到达，由统一 Child Reaper 和 Runtime 状态机汇合处理。 每个服务主命令和 ExecStop 辅助命令在 fork 后建立独立进程组；SIGTERM/SIGKILL 的 Runtime 信号接口面向整个进程组，避免只终止直接子进程而遗留其后代。
 
 ## PID 1 executable
 
