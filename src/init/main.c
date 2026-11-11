@@ -25,6 +25,7 @@
 
 enum shutdown_action {
     SHUTDOWN_NONE = 0,
+    SHUTDOWN_HALT,
     SHUTDOWN_POWER_OFF,
     SHUTDOWN_RESTART
 };
@@ -84,8 +85,14 @@ handle_signal(int signal_number, void *userdata)
 #ifdef SIGPWR
                || signal_number == SIGPWR
 #endif
-    ) {
+               || signal_number == SIGRTMIN + 4) {
         context->action = SHUTDOWN_POWER_OFF;
+        context->stopping = 1;
+    } else if (signal_number == SIGRTMIN + 3) {
+        context->action = SHUTDOWN_HALT;
+        context->stopping = 1;
+    } else if (signal_number == SIGRTMIN + 5 || signal_number == SIGINT) {
+        context->action = SHUTDOWN_RESTART;
         context->stopping = 1;
     }
 }
@@ -144,7 +151,12 @@ perform_shutdown(const struct ninit_environment_policy *policy,
         return -1;
     }
 
-    command = action == SHUTDOWN_RESTART ? RB_AUTOBOOT : RB_POWER_OFF;
+    if (action == SHUTDOWN_RESTART)
+        command = RB_AUTOBOOT;
+    else if (action == SHUTDOWN_HALT)
+        command = RB_HALT_SYSTEM;
+    else
+        command = RB_POWER_OFF;
     /* Match normal init shutdown ordering: services first, then sync storage. */
     sync();
     if (reboot(command) < 0)
@@ -179,7 +191,8 @@ finish_shutdown_request(struct init_context *context,
 
     saved_errno = errno;
     fprintf(stderr, "ninit-init: %s request denied or failed: errno=%d (%s)\n",
-            context->action == SHUTDOWN_RESTART ? "restart" : "poweroff",
+            context->action == SHUTDOWN_RESTART ? "restart" :
+            context->action == SHUTDOWN_HALT ? "halt" : "poweroff",
             saved_errno, strerror(saved_errno));
 
     /* Host/VM PID 1 remains alive if its reboot request is rejected. */
