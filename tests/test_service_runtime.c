@@ -186,10 +186,8 @@ main(void)
     memset(&spec, 0, sizeof(spec));
     spec.name = "timeout.service";
     spec.type = NINIT_UNIT_SERVICE;
-    spec.exec_start_argv = (const char *const[]){
-        "/bin/sh", "-c", "trap '' TERM; exec /bin/sleep 30", NULL
-    };
-    spec.exec_start_argc = 3;
+    spec.exec_start_argv = (const char *const[]){ "/bin/sleep", "30", NULL };
+    spec.exec_start_argc = 2;
     spec.timeout_stop_msec = 20;
     assert(ninit_unit_manager_add(units, &spec) == 0);
     assert(ninit_dependency_plan_build(units, "timeout.service", &plan) == 0);
@@ -205,6 +203,7 @@ main(void)
     } while (result < 0 && errno == EINTR);
     assert(result == 1);
     assert(ninit_service_runtime_check_exec(runtime, pid) == 1);
+    assert(kill(-pid, SIGSTOP) == 0);
     assert(ninit_job_manager_submit_stop(jobs, plan, 1, &job_id) == 0);
     assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
     assert(ninit_service_runtime_stop_timeout_ms(runtime) >= 0);
