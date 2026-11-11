@@ -55,6 +55,8 @@ struct ninit_unit {
     char **exec_stop_argv;
     size_t exec_stop_argc;
     int oneshot;
+    int keyword_no_shutdown;
+    int keyword_no_stop;
 };
 
 #ifdef __cplusplus
