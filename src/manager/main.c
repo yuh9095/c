@@ -517,12 +517,13 @@ run_manager(int fd, const char *unit_dir, const char *target)
         free(exec_pids);
         free(descriptors);
 
-        if ((ipc_events & POLLHUP) != 0) {
-            exit_code = 0;
-            break;
-        }
-        if ((ipc_events & POLLIN) == 0)
+        if ((ipc_events & POLLIN) == 0) {
+            if ((ipc_events & POLLHUP) != 0) {
+                exit_code = 0;
+                break;
+            }
             continue;
+        }
 
         result = ninit_ipc_receive(fd, buffer, sizeof(buffer),
                                    &header, &payload);
@@ -539,6 +540,29 @@ run_manager(int fd, const char *unit_dir, const char *target)
             header.type = NINIT_IPC_MSG_PONG;
             if (ninit_ipc_send(fd, &header, payload) != NINIT_IPC_OK)
                 goto cleanup;
+        } else if (header.type == NINIT_IPC_MSG_SHUTDOWN) {
+            if (header.payload_size == 4 &&
+                memcmp(payload, "halt", 4) == 0) {
+                if (setenv("RC_REBOOT", "NO", 1) < 0)
+                    goto cleanup;
+            } else if (header.payload_size == 7 &&
+                       memcmp(payload, "poweroff", 7) == 0) {
+                if (setenv("RC_REBOOT", "NO", 1) < 0)
+                    goto cleanup;
+            } else if (header.payload_size == 6 &&
+                       memcmp(payload, "reboot", 6) == 0) {
+                if (setenv("RC_REBOOT", "YES", 1) < 0)
+                    goto cleanup;
+            } else {
+                errno = EINVAL;
+                fprintf(stderr, "ninit-manager: invalid shutdown action\n");
+                goto cleanup;
+            }
+            if (setenv("RC_RUNLEVEL", "shutdown", 1) < 0 ||
+                setenv("RC_GOINGDOWN", "YES", 1) < 0)
+                goto cleanup;
+            exit_code = 0;
+            break;
         } else {
             fprintf(stderr, "ninit-manager: unsupported IPC message %u\n",
                     (unsigned int) header.type);
