@@ -16,6 +16,7 @@ struct ninit_manager_child_reaper {
     int write_fd;
     struct sigaction previous_action;
     int previous_subreaper;
+    int subreaper_changed;
 };
 
 static volatile sig_atomic_t signal_write_fd = -1;
@@ -80,6 +81,7 @@ ninit_manager_child_reaper_create(void)
         goto fail;
     if (prctl(PR_SET_CHILD_SUBREAPER, 1) < 0)
         goto fail;
+    reaper->subreaper_changed = 1;
 
     memset(&action, 0, sizeof(action));
     action.sa_handler = manager_sigchld_handler;
@@ -100,6 +102,8 @@ ninit_manager_child_reaper_create(void)
 fail:
     {
         int saved_errno = errno;
+        if (reaper->subreaper_changed)
+            if (reaper->subreaper_changed)
         (void) prctl(PR_SET_CHILD_SUBREAPER, reaper->previous_subreaper);
         if (pipe_fds[0] >= 0) close(pipe_fds[0]);
         if (pipe_fds[1] >= 0) close(pipe_fds[1]);
