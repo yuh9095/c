@@ -138,7 +138,7 @@ unit_copy(const struct ninit_unit_spec *spec)
     unit->oneshot = spec->oneshot;
     unit->keyword_no_shutdown = spec->keyword_no_shutdown;
     unit->keyword_no_stop = spec->keyword_no_stop;
-    unit->timeout_stop_sec = spec->timeout_stop_sec;
+    unit->timeout_stop_msec = spec->timeout_stop_msec;
     if (unit->name == NULL ||
         (spec->description != NULL && unit->description == NULL) ||
         copy_string_array(&unit->exec_start_argv, spec->exec_start_argv,
@@ -208,7 +208,7 @@ ninit_unit_manager_add(struct ninit_unit_manager *manager,
         (spec->oneshot != 0 && spec->oneshot != 1) ||
         (spec->keyword_no_shutdown != 0 && spec->keyword_no_shutdown != 1) ||
         (spec->keyword_no_stop != 0 && spec->keyword_no_stop != 1) ||
-        spec->timeout_stop_sec > 86400U ||
+        spec->timeout_stop_msec > 86400000U ||
         (spec->oneshot && spec->type != NINIT_UNIT_SERVICE) ||
         (spec->type == NINIT_UNIT_TARGET &&
          (spec->exec_start_argc != 0 || spec->exec_stop_argc != 0)) ||
