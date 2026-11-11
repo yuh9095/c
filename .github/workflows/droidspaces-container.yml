@@ -104,7 +104,7 @@ jobs:
             --init=/usr/bin/ninit-init \
             --allow-sandboxing \
             --net=host \
-            --bind-mount="$GITHUB_WORKSPACE:/workspace" \
+            --bind-mount="$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" \
             --volatile \
             start
 
@@ -115,7 +115,7 @@ jobs:
             test "$(readlink /proc/1/exe)" = "/usr/bin/ninit-init"
             printf "Container PID 1 command: "
             tr "\000" " " </proc/1/cmdline; echo
-            test -x /workspace/build/ninit-manager
+            test -x "$GITHUB_WORKSPACE/build/ninit-manager"
           '
 
           # Install only the test runner and namespace utilities in the guest.
@@ -127,7 +127,7 @@ jobs:
           # namespace test must execute; it may not be reported as SKIPPED.
           sudo droidspaces --name="$CONTAINER_NAME" run \
             env NINIT_REQUIRE_PID_NAMESPACE_TEST=1 \
-            ctest --test-dir /workspace/build --output-on-failure --timeout 60
+            ctest --test-dir "$GITHUB_WORKSPACE/build" --output-on-failure --timeout 60
 
           echo "Droidspaces container test completed successfully."
 
