@@ -151,6 +151,35 @@ ninit_service_runtime_signal_all(struct ninit_service_runtime *runtime,
     return 0;
 }
 
+int
+ninit_service_runtime_signal_job(struct ninit_service_runtime *runtime,
+                                uint64_t job_id, int signal_number)
+{
+    size_t i;
+    int first_error = 0;
+
+    if (runtime == NULL || job_id == 0 || signal_number < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (i = 0; i < runtime->count; ++i) {
+        struct service_process *process = &runtime->processes[i];
+        pid_t pid = process->job_id == job_id ? process->pid : -1;
+        pid_t stop_pid = process->stop_job_id == job_id ? process->stop_pid : -1;
+        if (pid > 0 && kill(pid, signal_number) < 0 && errno != ESRCH &&
+            first_error == 0)
+            first_error = errno;
+        if (stop_pid > 0 && kill(stop_pid, signal_number) < 0 &&
+            errno != ESRCH && first_error == 0)
+            first_error = errno;
+    }
+    if (first_error != 0) {
+        errno = first_error;
+        return -1;
+    }
+    return 0;
+}
+
 void
 ninit_service_runtime_destroy(struct ninit_service_runtime *runtime)
 {
