@@ -146,8 +146,19 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
     if (!process->stop_requested || !process->stop_exec_confirmed ||
         !process->stop_child_exited)
         return 0;
-    if (process->stop_pid > 0)
+    if (process->stop_pid > 0) {
+        pid_t helper_pgid = process->stop_pid;
         process->stop_pid = -1;
+        /*
+         * The ExecStop leader may have left descendants in its process
+         * group. The group remains addressable after the leader is reaped.
+         */
+        if (kill(-helper_pgid, SIGTERM) < 0 && errno != ESRCH) {
+            process->stop_success = 0;
+            if (process->stop_error == 0)
+                process->stop_error = errno;
+        }
+    }
     if (!WIFEXITED(process->stop_wait_status) ||
         WEXITSTATUS(process->stop_wait_status) != 0) {
         process->stop_success = 0;
@@ -596,6 +607,15 @@ ninit_service_runtime_child_exited(struct ninit_service_runtime *r,
     p->wait_status = wait_status;
     if (p->stop_requested) {
         int clean_exit = WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
+        /*
+         * Reap of the service leader does not imply its process group is
+         * empty. Terminate any surviving descendants before completing stop.
+         */
+        if (kill(-p->pid, SIGTERM) < 0 && errno != ESRCH) {
+            p->stop_success = 0;
+            if (p->stop_error == 0)
+                p->stop_error = errno;
+        }
         int expected_term = p->stop_signal_sent && WIFSIGNALED(wait_status) &&
                             WTERMSIG(wait_status) == SIGTERM;
         if (!clean_exit && !expected_term) {
