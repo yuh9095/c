@@ -72,8 +72,8 @@ main(void)
      * this manager process and delivered through the same reaper callback.
      */
     {
-        pid_t intermediate = fork();
         pid_t manager_pid = getpid();
+        pid_t intermediate = fork();
         assert(intermediate >= 0);
         if (intermediate == 0) {
             pid_t intermediate_pid = getpid();
