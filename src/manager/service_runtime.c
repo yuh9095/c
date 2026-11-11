@@ -69,7 +69,7 @@ complete_oneshot_start_if_ready(struct ninit_service_runtime *runtime,
               WEXITSTATUS(process->wait_status) == 0;
     if (ninit_job_manager_complete(runtime->jobs, process->job_id,
                                    process->plan_index, success,
-                                   success ? 0 : ECHILD) < 0)
+                                   success ? 0 : EIO) < 0)
         return -1;
     process->start_completion_done = 1;
     return 1;
