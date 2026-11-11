@@ -117,6 +117,7 @@ int ninit_environment_probe_capabilities(
 
 struct ninit_environment_policy {
     int allow_host_shutdown;
+    int allow_guest_shutdown;
     int allow_mount_proc;
     int allow_mount_sys;
     int allow_mount_devtmpfs;
@@ -132,6 +133,11 @@ void ninit_environment_get_policy(
  * Returns 0 when permitted, otherwise -1 with EPERM/EOPNOTSUPP.
  */
 int ninit_environment_authorize_host_shutdown(
+    const struct ninit_environment_policy *policy,
+    const struct ninit_environment_capabilities *capabilities);
+
+/* Authorize reboot/poweroff confined to a container PID namespace or VM guest. */
+int ninit_environment_authorize_guest_shutdown(
     const struct ninit_environment_policy *policy,
     const struct ninit_environment_capabilities *capabilities);
 
