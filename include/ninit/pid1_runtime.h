@@ -26,6 +26,14 @@ typedef void (*ninit_child_exit_callback)(pid_t pid,
 int ninit_pid1_reap_children(ninit_child_exit_callback callback,
                              void *userdata);
 
+/*
+ * After the supervised Manager has been reaped, terminate any service
+ * descendants adopted by PID 1. Signal their isolated process groups with
+ * SIGTERM, wait grace_msec, then use SIGKILL and reap until none remain.
+ * Requires procfs to expose /proc/self/task/<pid>/children.
+ */
+int ninit_pid1_cleanup_orphaned_children(unsigned int grace_msec);
+
 #define NINIT_PID1_EVENT_MAX_SIGNALS 8
 
 struct ninit_pid1_event_source {
