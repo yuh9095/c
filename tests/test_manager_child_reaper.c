@@ -76,6 +76,7 @@ main(void)
         pid_t manager_pid = getpid();
         assert(intermediate >= 0);
         if (intermediate == 0) {
+            pid_t intermediate_pid = getpid();
             pid_t grandchild = fork();
             if (grandchild < 0)
                 _exit(90);
@@ -84,7 +85,7 @@ main(void)
                 int attempts;
                 for (attempts = 0; attempts < 3000; ++attempts) {
                     pid_t parent = getppid();
-                    if (parent != getpid() && parent != intermediate) {
+                    if (parent != intermediate_pid) {
                         _exit(parent == manager_pid ? 44 : 99);
                     }
                     (void)nanosleep(&delay, NULL);
