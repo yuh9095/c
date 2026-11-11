@@ -1,0 +1,54 @@
+name: Droidspaces container integration
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: droidspaces-container-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  droidspaces-container:
+    # Register the runner from inside the Droidspaces Linux container and
+    # add the custom "droidspaces" label.
+    runs-on: [self-hosted, linux, ARM64, droidspaces]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check Droidspaces runner environment
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test "$(uname -m)" = "aarch64" || test "$(uname -m)" = "arm64"
+          command -v cmake
+          command -v ninja
+          command -v gcc
+          command -v unshare
+          command -v ctest
+          echo "Runner identity:"
+          id
+          echo "Kernel:"
+          uname -a
+          echo "Container PID 1:"
+          cat /proc/1/comm
+          echo "PID namespace:"
+          readlink /proc/self/ns/pid
+          echo "Mount namespace:"
+          readlink /proc/self/ns/mnt
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=gcc
+
+      - name: Build
+        run: cmake --build build --parallel 2
+
+      - name: Run tests (PID namespace test is required)
+        env:
+          NINIT_REQUIRE_PID_NAMESPACE_TEST: "1"
+        run: ctest --test-dir build --output-on-failure --timeout 60
