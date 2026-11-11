@@ -6,6 +6,10 @@ manager=$2
 helper=$3
 
 if ! command -v unshare >/dev/null 2>&1; then
+    if [ "${NINIT_REQUIRE_PID_NAMESPACE_TEST:-0}" = "1" ]; then
+        echo "FAIL: required unshare utility is unavailable"
+        exit 1
+    fi
     echo "SKIP: unshare is unavailable"
     exit 77
 fi
