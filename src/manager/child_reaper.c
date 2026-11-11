@@ -9,11 +9,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/prctl.h>
 
 struct ninit_manager_child_reaper {
     int read_fd;
     int write_fd;
     struct sigaction previous_action;
+    int previous_subreaper;
 };
 
 static volatile sig_atomic_t signal_write_fd = -1;
@@ -69,6 +71,16 @@ ninit_manager_child_reaper_create(void)
         set_pipe_flags(pipe_fds[1]) < 0)
         goto fail;
 
+    /*
+     * Adopt orphaned service descendants so the manager can reap them rather
+     * than silently delegating them to the container or host init process.
+     * Preserve the caller's prior setting for library/test embedding.
+     */
+    if (prctl(PR_GET_CHILD_SUBREAPER, &reaper->previous_subreaper) < 0)
+        goto fail;
+    if (prctl(PR_SET_CHILD_SUBREAPER, 1) < 0)
+        goto fail;
+
     memset(&action, 0, sizeof(action));
     action.sa_handler = manager_sigchld_handler;
     sigemptyset(&action.sa_mask);
@@ -88,6 +100,7 @@ ninit_manager_child_reaper_create(void)
 fail:
     {
         int saved_errno = errno;
+        (void) prctl(PR_SET_CHILD_SUBREAPER, reaper->previous_subreaper);
         if (pipe_fds[0] >= 0) close(pipe_fds[0]);
         if (pipe_fds[1] >= 0) close(pipe_fds[1]);
         free(reaper);
@@ -171,6 +184,7 @@ ninit_manager_child_reaper_destroy(
     (void) sigprocmask(SIG_BLOCK, &blocked, &previous_mask);
     signal_write_fd = -1;
     (void) sigaction(SIGCHLD, &reaper->previous_action, NULL);
+    (void) prctl(PR_SET_CHILD_SUBREAPER, reaper->previous_subreaper);
     active_reaper = NULL;
     if (reaper->read_fd >= 0) close(reaper->read_fd);
     if (reaper->write_fd >= 0) close(reaper->write_fd);
