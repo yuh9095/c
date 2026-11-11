@@ -26,8 +26,9 @@ int ninit_service_runtime_signal_all(
  * SIGTERM to the tracked Service and complete after its child exits.
  * Returns 1 when a Unit was handled, 0 when no work is currently available,
  * or -1 on error. Targets are completed immediately. Services are spawned
- * and tracked until both their exec handshake and child-exit notification
- * have been processed.
+ * and tracked until their exec handshake and child-exit notification have
+ * been processed. Simple services complete their Start Job after exec
+ * succeeds; oneshot services complete only after a successful child exit.
  */
 int ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                                    uint64_t job_id,
