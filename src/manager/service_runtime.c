@@ -67,6 +67,8 @@ find_stop_helper(struct ninit_service_runtime *runtime, pid_t pid)
     return NULL;
 }
 
+static uint64_t monotonic_milliseconds(void);
+
 static int
 complete_oneshot_start_if_ready(struct ninit_service_runtime *runtime,
                                struct service_process *process)
@@ -140,6 +142,7 @@ static int
 advance_stop_helper(struct ninit_service_runtime *runtime,
                     struct service_process *process)
 {
+    (void)runtime;
     if (!process->stop_requested || !process->stop_exec_confirmed ||
         !process->stop_child_exited)
         return 0;
