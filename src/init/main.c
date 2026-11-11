@@ -121,6 +121,16 @@ perform_shutdown(const struct ninit_environment_policy *policy,
         errno = EINVAL;
         return -1;
     }
+    if (!policy->allow_host_shutdown &&
+        environment->kind == NINIT_ENVIRONMENT_CONTAINER) {
+        /*
+         * The runtime owns container lifecycle: stop services, then exit PID 1.
+         * This path deliberately needs no CAP_SYS_BOOT or capability probe.
+         */
+        sync();
+        return 1;
+    }
+
     memset(&capabilities, 0, sizeof(capabilities));
     if (ninit_environment_probe_capabilities("/", &capabilities) < 0)
         return -1;
@@ -129,11 +139,6 @@ perform_shutdown(const struct ninit_environment_policy *policy,
         if (ninit_environment_authorize_host_shutdown(
                 policy, &capabilities) < 0)
             return -1;
-    } else if (environment->kind == NINIT_ENVIRONMENT_CONTAINER) {
-        /* The runtime owns container lifecycle: stop services, then exit PID 1.
-         * Never rely on CAP_SYS_BOOT or risk rebooting the host from a container. */
-        sync();
-        return 1;
     } else if (ninit_environment_authorize_guest_shutdown(
                    policy, &capabilities) < 0) {
         return -1;
