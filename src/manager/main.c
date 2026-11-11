@@ -21,7 +21,7 @@
 static void
 print_usage(const char *program)
 {
-    printf("Usage: %s [--version|--help] --ipc-fd FD [--unit-dir DIR --target NAME]\n", program);
+    printf("Usage: %s [--version|--help] --ipc-fd FD [--unit-dir DIR --target NAME] [optional shutdown.target]\n", program);
     puts("Ninit service manager (early development).");
 }
 
@@ -166,6 +166,115 @@ stop_service_children(struct ninit_service_runtime *runtime,
 }
 
 static int
+run_shutdown_target(struct ninit_service_runtime *runtime,
+                    struct ninit_manager_child_reaper *reaper,
+                    struct ninit_job_manager *jobs,
+                    const struct ninit_dependency_plan *plan)
+{
+    uint64_t job_id;
+    size_t i;
+
+    if (plan == NULL)
+        return 0;
+    for (i = 0; i < ninit_dependency_plan_count(plan); ++i) {
+        const struct ninit_unit *unit = ninit_dependency_plan_unit(plan, i);
+        if (unit == NULL ||
+            (unit->type == NINIT_UNIT_SERVICE && !unit->oneshot)) {
+            errno = EOPNOTSUPP;
+            fprintf(stderr,
+                    "ninit-manager: shutdown.target only supports oneshot services; refusing unsafe daemon start\n");
+            return -1;
+        }
+    }
+    if (ninit_job_manager_submit_start(jobs, plan, 4, &job_id) < 0)
+        return -1;
+
+    for (;;) {
+        struct ninit_job_info info;
+        size_t pending = ninit_service_runtime_exec_pending_count(runtime);
+        struct pollfd *fds = calloc(pending + 1, sizeof(*fds));
+        pid_t *pids = pending == 0 ? NULL : calloc(pending, sizeof(*pids));
+        size_t j;
+        int dispatched;
+        int polled;
+
+        if (fds == NULL || (pending != 0 && pids == NULL)) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        do {
+            dispatched = ninit_service_runtime_dispatch(runtime, job_id, NULL);
+        } while (dispatched > 0);
+        if (dispatched < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        if (ninit_job_manager_get_info(jobs, job_id, &info) < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        if (info.state == NINIT_JOB_SUCCEEDED) {
+            free(pids);
+            free(fds);
+            fprintf(stderr, "ninit-manager: shutdown.target completed\n");
+            return 0;
+        }
+        if (info.state == NINIT_JOB_FAILED ||
+            info.state == NINIT_JOB_CANCELLED) {
+            int e = info.error_code != 0 ? info.error_code : EIO;
+            free(pids);
+            free(fds);
+            errno = e;
+            fprintf(stderr, "ninit-manager: shutdown.target failed: %s\n",
+                    strerror(e));
+            return -1;
+        }
+
+        fds[0].fd = ninit_manager_child_reaper_fd(reaper);
+        fds[0].events = POLLIN;
+        for (j = 0; j < pending; ++j) {
+            int exec_fd;
+            if (ninit_service_runtime_exec_pending_at(
+                    runtime, j, &pids[j], &exec_fd) < 0) {
+                free(pids);
+                free(fds);
+                return -1;
+            }
+            fds[j + 1].fd = exec_fd;
+            fds[j + 1].events = POLLIN;
+        }
+        do {
+            polled = poll(fds, pending + 1, -1);
+        } while (polled < 0 && errno == EINTR);
+        if (polled < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        for (j = 0; j < pending; ++j) {
+            if ((fds[j + 1].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+                int check = ninit_service_runtime_check_exec(runtime, pids[j]);
+                if (check < 0 && errno != ECHILD && errno != EALREADY)
+                    fprintf(stderr,
+                            "ninit-manager: shutdown service %ld exec: %s\n",
+                            (long) pids[j], strerror(errno));
+            }
+        }
+        if (ninit_manager_child_reaper_drain(
+                reaper, manager_child_exited, runtime) < 0) {
+            free(pids);
+            free(fds);
+            return -1;
+        }
+        free(pids);
+        free(fds);
+    }
+}
+
+static int
 run_manager(int fd, const char *unit_dir, const char *target)
 {
     unsigned char buffer[NINIT_IPC_HEADER_SIZE + NINIT_IPC_MAX_PAYLOAD];
@@ -176,6 +285,7 @@ run_manager(int fd, const char *unit_dir, const char *target)
     struct ninit_job_manager *jobs = NULL;
     struct ninit_unit_manager *units = NULL;
     struct ninit_dependency_plan *plan = NULL;
+    struct ninit_dependency_plan *shutdown_plan = NULL;
     struct ninit_service_runtime *runtime = NULL;
     struct ninit_manager_child_reaper *reaper = NULL;
     size_t pending_count;
@@ -218,6 +328,14 @@ run_manager(int fd, const char *unit_dir, const char *target)
             fprintf(stderr, "ninit-manager: cannot build target %s: %s\n",
                     target, strerror(errno));
             goto cleanup;
+        }
+        if (ninit_unit_manager_find(units, "shutdown.target") != NULL) {
+            if (ninit_dependency_plan_build(units, "shutdown.target",
+                                            &shutdown_plan) < 0) {
+                fprintf(stderr, "ninit-manager: cannot build shutdown.target: %s\n",
+                        strerror(errno));
+                goto cleanup;
+            }
         }
         if (ninit_job_manager_submit_start(jobs, plan, 4, &startup_job_id) < 0) {
             fprintf(stderr, "ninit-manager: cannot submit startup job: %s\n",
@@ -357,11 +475,19 @@ run_manager(int fd, const char *unit_dir, const char *target)
         }
     }
 cleanup:
-    if (stop_service_children(runtime, reaper, jobs, plan) < 0)
-        fprintf(stderr, "ninit-manager: failed to stop service children: %s\n",
-                strerror(errno));
+    {
+        int stopped = stop_service_children(runtime, reaper, jobs, plan);
+        if (stopped < 0)
+            fprintf(stderr, "ninit-manager: failed to stop service children: %s\n",
+                    strerror(errno));
+        else if (exit_code == 0 && shutdown_plan != NULL &&
+                 run_shutdown_target(runtime, reaper, jobs, shutdown_plan) < 0)
+            fprintf(stderr, "ninit-manager: shutdown runlevel execution failed: %s\n",
+                    strerror(errno));
+    }
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
+    ninit_dependency_plan_destroy(shutdown_plan);
     ninit_dependency_plan_destroy(plan);
     ninit_unit_manager_destroy(units);
     ninit_job_manager_destroy(jobs);
