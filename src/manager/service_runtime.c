@@ -3,6 +3,7 @@
 #include <ninit/service_runtime.h>
 #include <errno.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -23,6 +24,7 @@ struct service_process {
     int stop_child_exited;
     int stop_signal_sent;
     int exec_confirmed;
+    int start_completion_done;
     int child_exited;
     int wait_status;
 };
@@ -52,6 +54,25 @@ find_stop_helper(struct ninit_service_runtime *runtime, pid_t pid)
         if (runtime->processes[i].stop_pid == pid)
             return &runtime->processes[i];
     return NULL;
+}
+
+static int
+complete_oneshot_start_if_ready(struct ninit_service_runtime *runtime,
+                               struct service_process *process)
+{
+    int success;
+
+    if (!process->unit->oneshot || !process->exec_confirmed ||
+        !process->child_exited || process->start_completion_done)
+        return 0;
+    success = WIFEXITED(process->wait_status) &&
+              WEXITSTATUS(process->wait_status) == 0;
+    if (ninit_job_manager_complete(runtime->jobs, process->job_id,
+                                   process->plan_index, success,
+                                   success ? 0 : ECHILD) < 0)
+        return -1;
+    process->start_completion_done = 1;
+    return 1;
 }
 
 static int
@@ -334,8 +355,17 @@ ninit_service_runtime_check_exec(struct ninit_service_runtime *r, pid_t pid)
         if (result == 0) return 0;
         e = result < 0 ? errno : 0;
         close(p->exec_fd); p->exec_fd = -1; p->exec_confirmed = 1;
-        if (ninit_job_manager_complete(r->jobs, p->job_id, p->plan_index,
-                                       result > 0, e) < 0) return -1;
+        if (result < 0) {
+            if (ninit_job_manager_complete(r->jobs, p->job_id,
+                    p->plan_index, 0, e) < 0) return -1;
+            p->start_completion_done = 1;
+        } else if (!p->unit->oneshot) {
+            if (ninit_job_manager_complete(r->jobs, p->job_id,
+                    p->plan_index, 1, 0) < 0) return -1;
+            p->start_completion_done = 1;
+        } else if (complete_oneshot_start_if_ready(r, p) < 0) {
+            return -1;
+        }
     }
     if (p->child_exited && p->exec_confirmed && p->stop_pid <= 0) {
         if (complete_stop_if_ready(r, p) < 0) return -1;
@@ -377,6 +407,9 @@ ninit_service_runtime_child_exited(struct ninit_service_runtime *r,
     if (p == NULL) { errno = ENOENT; return -1; }
     if (p->child_exited) { errno = EALREADY; return -1; }
     p->child_exited = 1; p->wait_status = wait_status;
+    if (p->unit->oneshot && p->exec_confirmed &&
+        complete_oneshot_start_if_ready(r, p) < 0)
+        return -1;
     if (p->exec_confirmed && p->stop_pid <= 0) {
         if (complete_stop_if_ready(r, p) < 0) return -1;
         remove_process(r, p);
