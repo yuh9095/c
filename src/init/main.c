@@ -304,7 +304,7 @@ main(int argc, char **argv)
                 &environment_policy, &environment_capabilities) == 0) {
             fprintf(stderr,
                     "ninit-init: host shutdown policy gate: authorized "
-                    "(a reboot/poweroff request is still not issued here)\n");
+                    "(startup snapshot only; shutdown authorization is rechecked before reboot)\n");
         } else {
             int shutdown_error = errno;
             fprintf(stderr,
