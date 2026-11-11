@@ -97,8 +97,6 @@ static int
 advance_stop_helper(struct ninit_service_runtime *runtime,
                     struct service_process *process)
 {
-    int e;
-
     if (!process->stop_requested || !process->stop_exec_confirmed ||
         !process->stop_child_exited)
         return 0;
@@ -111,7 +109,6 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
         if (kill(process->pid, SIGTERM) == 0 || errno == ESRCH) {
             process->stop_signal_sent = 1;
         } else {
-            e = errno;
             process->stop_success = 0;
             process->stop_signal_sent = 1;
         }
