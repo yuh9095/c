@@ -95,6 +95,17 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_compile_options(test-pid1-runtime PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME pid1-runtime COMMAND test-pid1-runtime)
 
+    add_executable(test-pid1-namespace-helper tests/pid1_namespace_helper.c)
+    target_compile_options(test-pid1-namespace-helper PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME pid1-namespace-manager-crash
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_pid1_namespace.sh
+                $<TARGET_FILE:ninit-init>
+                $<TARGET_FILE:ninit-manager>
+                $<TARGET_FILE:test-pid1-namespace-helper>)
+    set_tests_properties(pid1-namespace-manager-crash PROPERTIES
+        SKIP_RETURN_CODE 77
+        TIMEOUT 45)
+
     add_executable(test-environment tests/test_environment.c)
     target_link_libraries(test-environment PRIVATE ninit-init-core)
     target_compile_options(test-environment PRIVATE -Wall -Wextra -Wpedantic)
