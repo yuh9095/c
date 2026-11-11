@@ -173,6 +173,7 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
 {
     uint64_t job_id;
     size_t i;
+    int escalation = 0;
 
     if (plan == NULL)
         return 0;
@@ -197,6 +198,8 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
         size_t j;
         int dispatched;
         int polled;
+        int timeout_ms = escalation == 0 ? 30000 :
+                         escalation == 1 ? 5000 : -1;
 
         do {
             dispatched = ninit_service_runtime_dispatch(runtime, job_id, NULL);
@@ -247,12 +250,30 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
             fds[j + 1].events = POLLIN;
         }
         do {
-            polled = poll(fds, pending + 1, -1);
+            polled = poll(fds, pending + 1, timeout_ms);
         } while (polled < 0 && errno == EINTR);
         if (polled < 0) {
             free(pids);
             free(fds);
             return -1;
+        }
+        if (polled == 0) {
+            if (escalation == 0) {
+                fprintf(stderr, "ninit-manager: shutdown.target grace period expired; sending SIGTERM\n");
+                if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+                    fprintf(stderr, "ninit-manager: shutdown hook SIGTERM failed: %s\n",
+                            strerror(errno));
+                escalation = 1;
+            } else if (escalation == 1) {
+                fprintf(stderr, "ninit-manager: shutdown.target still active; sending SIGKILL\n");
+                if (ninit_service_runtime_signal_all(runtime, SIGKILL) < 0)
+                    fprintf(stderr, "ninit-manager: shutdown hook SIGKILL failed: %s\n",
+                            strerror(errno));
+                escalation = 2;
+            }
+            free(pids);
+            free(fds);
+            continue;
         }
         for (j = 0; j < pending; ++j) {
             if ((fds[j + 1].revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
