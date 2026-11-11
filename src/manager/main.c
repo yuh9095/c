@@ -191,22 +191,22 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
 
     for (;;) {
         struct ninit_job_info info;
-        size_t pending = ninit_service_runtime_exec_pending_count(runtime);
-        struct pollfd *fds = calloc(pending + 1, sizeof(*fds));
-        pid_t *pids = pending == 0 ? NULL : calloc(pending, sizeof(*pids));
+        struct pollfd *fds;
+        pid_t *pids;
+        size_t pending;
         size_t j;
         int dispatched;
         int polled;
 
-        if (fds == NULL || (pending != 0 && pids == NULL)) {
-            free(pids);
-            free(fds);
-            return -1;
-        }
         do {
             dispatched = ninit_service_runtime_dispatch(runtime, job_id, NULL);
         } while (dispatched > 0);
-        if (dispatched < 0) {
+        if (dispatched < 0)
+            return -1;
+        pending = ninit_service_runtime_exec_pending_count(runtime);
+        fds = calloc(pending + 1, sizeof(*fds));
+        pids = pending == 0 ? NULL : calloc(pending, sizeof(*pids));
+        if (fds == NULL || (pending != 0 && pids == NULL)) {
             free(pids);
             free(fds);
             return -1;
