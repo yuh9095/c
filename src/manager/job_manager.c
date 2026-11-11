@@ -90,8 +90,17 @@ submit_plan(struct ninit_job_manager *manager,
             job->items[i].wave >= job->wave_count) {
             free(job->items); free(job); errno = EINVAL; return -1;
         }
-        if (is_stop)
+        if (is_stop) {
             job->items[i].wave = job->wave_count - 1 - job->items[i].wave;
+            /* OpenRC -shutdown and -stop leave the service running during
+             * the ordered stop phase; the final shutdown signal handles it. */
+            if (job->items[i].unit->type == NINIT_UNIT_SERVICE &&
+                (job->items[i].unit->keyword_no_shutdown ||
+                 job->items[i].unit->keyword_no_stop)) {
+                job->items[i].state = ITEM_DONE;
+                ++job->completed;
+            }
+        }
     }
     job->next = manager->jobs;
     manager->jobs = job;
