@@ -414,4 +414,4 @@ PID 1 发现 Manager 子进程退出后，会先清理被重新托管到 PID 1 �
 
 CTest 中的 `pid1-namespace-manager-crash` 尝试使用 `unshare --mount --pid --fork --mount-proc` 启动真正的 `ninit-init`，并让它以 PID 1 身份运行真实的 `ninit-manager`。测试服务第一次启动时派生一个忽略 SIGTERM 的后台后代，然后故意 SIGKILL Manager；PID 1 必须完成遗留进程清理后才能重启 Manager。第二次启动通过继承的 flock 锁确认旧后台后代已经退出，再请求容器式有序关机。
 
-该测试不调用 reboot(2)，不挂载或改动宿主机文件系统，只在临时目录中创建 unit 和标记文件。若 runner 不允许创建 mount/PID namespace，CTest 将其标记为 SKIP（返回码 77），而不是把权限不足误报为代码失败。CI 的普通单元测试仍独立运行；应在具备 user namespace 或 CAP_SYS_ADMIN 的 Linux 环境中执行此集成测试以获得端到端覆盖。
+该测试不调用 reboot(2)，不挂载或改动宿主机文件系统，只在临时目录中创建 unit 和标记文件。测试先尝试普通 namespace 权限，再尝试 rootless user namespace；若 runner 两者都不允许，CTest 将其标记为 SKIP（返回码 77），而不是把权限不足误报为代码失败。CI 的普通单元测试仍独立运行；应在具备 user namespace 或 CAP_SYS_ADMIN 的 Linux 环境中执行此集成测试以获得端到端覆盖。
