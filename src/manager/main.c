@@ -209,6 +209,81 @@ stop_service_children(struct ninit_service_runtime *runtime,
     return 0;
 }
 
+/*
+ * Runtime records cover service leaders and ExecStop helpers. Once a leader
+ * exits, its remaining descendants are adopted by the manager subreaper and
+ * are no longer represented by a Runtime record. Drain that final ownership
+ * set before destroying the reaper or exiting.
+ */
+static int
+stop_adopted_children(struct ninit_manager_child_reaper *reaper,
+                      struct ninit_service_runtime *runtime)
+{
+    int have_children;
+    int kill_sent = 0;
+    int grace_ms = 5000;
+
+    if (reaper == NULL)
+        return 0;
+    have_children = ninit_manager_child_reaper_has_children(reaper);
+    if (have_children < 0)
+        return -1;
+    if (!have_children)
+        return 0;
+
+    fprintf(stderr,
+            "ninit-manager: adopted descendants remain; sending SIGTERM to their process groups\n");
+    if (ninit_manager_child_reaper_signal_children(reaper, SIGTERM) < 0)
+        fprintf(stderr, "ninit-manager: adopted-child SIGTERM failed: %s\n",
+                strerror(errno));
+
+    for (;;) {
+        struct pollfd descriptor;
+        int result;
+
+        have_children = ninit_manager_child_reaper_has_children(reaper);
+        if (have_children < 0)
+            return -1;
+        if (!have_children)
+            return 0;
+
+        descriptor.fd = ninit_manager_child_reaper_fd(reaper);
+        descriptor.events = POLLIN;
+        descriptor.revents = 0;
+        do {
+            result = poll(&descriptor, 1, kill_sent ? 1000 : grace_ms);
+        } while (result < 0 && errno == EINTR);
+        if (result < 0)
+            return -1;
+        if ((descriptor.revents & (POLLIN | POLLHUP | POLLERR)) != 0) {
+            if (ninit_manager_child_reaper_drain(
+                    reaper, manager_child_exited, runtime) < 0)
+                return -1;
+        }
+        if (result == 0 && !kill_sent) {
+            fprintf(stderr,
+                    "ninit-manager: adopted descendants ignored SIGTERM; sending SIGKILL\n");
+            if (ninit_manager_child_reaper_signal_children(
+                    reaper, SIGKILL) < 0)
+                fprintf(stderr,
+                        "ninit-manager: adopted-child SIGKILL failed: %s\n",
+                        strerror(errno));
+            kill_sent = 1;
+        } else if (kill_sent) {
+            /*
+             * New descendants can be adopted after their parent exits.
+             * Re-signal the current direct-child groups until the ownership
+             * list is empty and waitpid has reaped every exit.
+             */
+            if (ninit_manager_child_reaper_signal_children(
+                    reaper, SIGKILL) < 0 && errno != ESRCH)
+                fprintf(stderr,
+                        "ninit-manager: repeated adopted-child SIGKILL failed: %s\n",
+                        strerror(errno));
+        }
+    }
+}
+
 static int
 validate_shutdown_plan(const struct ninit_dependency_plan *plan)
 {
@@ -615,6 +690,10 @@ cleanup:
                     "ninit-manager: emergency child cleanup failed: %s\n",
                     strerror(errno));
         }
+        if (stop_adopted_children(reaper, runtime) < 0)
+            fprintf(stderr,
+                    "ninit-manager: adopted-child cleanup failed: %s\n",
+                    strerror(errno));
     }
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
