@@ -302,13 +302,13 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
         if (polled == 0) {
             if (escalation == 0) {
                 fprintf(stderr, "ninit-manager: shutdown.target grace period expired; sending SIGTERM\n");
-                if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+                if (ninit_service_runtime_signal_job(runtime, job_id, SIGTERM) < 0)
                     fprintf(stderr, "ninit-manager: shutdown hook SIGTERM failed: %s\n",
                             strerror(errno));
                 escalation = 1;
             } else if (escalation == 1) {
                 fprintf(stderr, "ninit-manager: shutdown.target still active; sending SIGKILL\n");
-                if (ninit_service_runtime_signal_all(runtime, SIGKILL) < 0)
+                if (ninit_service_runtime_signal_job(runtime, job_id, SIGKILL) < 0)
                     fprintf(stderr, "ninit-manager: shutdown hook SIGKILL failed: %s\n",
                             strerror(errno));
                 escalation = 2;
