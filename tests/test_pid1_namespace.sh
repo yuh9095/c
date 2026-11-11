@@ -9,10 +9,10 @@ if ! command -v unshare >/dev/null 2>&1; then
     echo "SKIP: unshare is unavailable"
     exit 77
 fi
-if unshare --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
-    namespace_args="--mount --pid --fork --mount-proc"
-elif unshare --user --map-root-user --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
-    namespace_args="--user --map-root-user --mount --pid --fork --mount-proc"
+if unshare --kill-child --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
+    namespace_args="--kill-child --mount --pid --fork --mount-proc"
+elif unshare --kill-child --user --map-root-user --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
+    namespace_args="--kill-child --user --map-root-user --mount --pid --fork --mount-proc"
 else
     if [ "${NINIT_REQUIRE_PID_NAMESPACE_TEST:-0}" = "1" ]; then
         echo "FAIL: required mount/PID namespace creation is unavailable"
@@ -31,7 +31,10 @@ cleanup() {
     fi
     rm -rf "$tmp"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 mkdir "$tmp/units"
 : > "$tmp/console"
