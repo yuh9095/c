@@ -15,6 +15,17 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 option(NINIT_BUILD_TESTS "Build Ninit tests" ON)
 
+option(NINIT_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+
+if(NINIT_ENABLE_ASAN)
+    if(NOT CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "NINIT_ENABLE_ASAN requires GCC or Clang")
+    endif()
+
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address)
+endif()
+
 add_library(ninit-common STATIC
     src/common/log.c
     src/common/ipc_protocol.c
