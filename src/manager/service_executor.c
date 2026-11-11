@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <unistd.h>
 
 static int
@@ -58,6 +59,14 @@ ninit_service_executor_spawn_argv(const char *const *argv, size_t argc,
         int exec_errno;
         ssize_t written;
         close(pipe_fds[0]);
+        /* Isolate this command so stop signals also reach its descendants. */
+        if (setpgid(0, 0) < 0) {
+            exec_errno = errno;
+            do {
+                written = write(pipe_fds[1], &exec_errno, sizeof(exec_errno));
+            } while (written < 0 && errno == EINTR);
+            _exit(127);
+        }
         execvp(argv[0], (char *const *) argv);
         exec_errno = errno;
         do {
