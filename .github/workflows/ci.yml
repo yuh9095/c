@@ -34,8 +34,14 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
+      - name: Test unit suite
+        run: ctest --test-dir build --output-on-failure -L unit --timeout 30
+
+      - name: Test component suite
+        run: ctest --test-dir build --output-on-failure -L component --timeout 30
+
+      - name: Test namespace integration suite
+        run: ctest --test-dir build --output-on-failure -L integration --timeout 60
 
   asan:
     name: AddressSanitizer (glibc)
@@ -63,4 +69,7 @@ jobs:
       - name: Run tests under AddressSanitizer
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:strict_string_checks=1
-        run: ctest --test-dir build-asan --output-on-failure --timeout 60
+        run: |
+          ctest --test-dir build-asan --output-on-failure -L unit --timeout 30
+          ctest --test-dir build-asan --output-on-failure -L component --timeout 30
+          ctest --test-dir build-asan --output-on-failure -L integration --timeout 60
