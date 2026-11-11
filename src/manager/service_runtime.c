@@ -113,11 +113,13 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
         if (process->stop_error == 0)
             process->stop_error = EIO;
     }
-    if (!process->stop_signal_sent) {
+    /* ExecStop may itself have stopped the service; never signal a reaped leader. */
+    if (!process->child_exited && !process->stop_signal_sent) {
         if (kill(-process->pid, SIGTERM) == 0 || errno == ESRCH) {
             process->stop_signal_sent = 1;
         } else {
             process->stop_success = 0;
+            process->stop_error = errno;
             process->stop_signal_sent = 1;
         }
     }
@@ -525,7 +527,23 @@ ninit_service_runtime_child_exited(struct ninit_service_runtime *r,
     p = find_process(r, pid);
     if (p == NULL) { errno = ENOENT; return -1; }
     if (p->child_exited) { errno = EALREADY; return -1; }
-    p->child_exited = 1; p->wait_status = wait_status;
+    p->child_exited = 1;
+    p->wait_status = wait_status;
+    if (p->stop_requested) {
+        int clean_exit = WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
+        int expected_term = p->stop_signal_sent && WIFSIGNALED(wait_status) &&
+                            WTERMSIG(wait_status) == SIGTERM;
+        if (!clean_exit && !expected_term) {
+            p->stop_success = 0;
+            if (p->stop_error == 0)
+                p->stop_error = EIO;
+            /* The main service died unexpectedly while ExecStop was active. */
+            if (p->stop_pid > 0 &&
+                kill(-p->stop_pid, SIGTERM) < 0 && errno != ESRCH &&
+                p->stop_error == EIO)
+                p->stop_error = errno;
+        }
+    }
     if (p->unit->oneshot && p->exec_confirmed &&
         complete_oneshot_start_if_ready(r, p) < 0)
         return -1;
