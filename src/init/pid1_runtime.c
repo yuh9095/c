@@ -131,22 +131,19 @@ read_child_pids(pid_t **pids_out, size_t *count_out)
 }
 
 static int
-signal_child_groups(const pid_t *pids, size_t count, int signal_number)
+signal_children(const pid_t *pids, size_t count, int signal_number)
 {
     size_t i;
     int signalled = 0;
-    pid_t own_group = getpgrp();
 
+    /*
+     * Signal only the direct children listed by procfs. A child may share a
+     * process group with unrelated processes, so kill(-pgid, ...) is not safe
+     * for generic adopted descendants. Killing one level at a time reparents
+     * the next level to PID 1; the outer loop then discovers and cleans it.
+     */
     for (i = 0; i < count; i++) {
-        pid_t group = getpgid(pids[i]);
-        int result;
-
-        if (group > 1 && group != own_group)
-            result = kill(-group, signal_number);
-        else
-            result = kill(pids[i], signal_number);
-
-        if (result == 0) {
+        if (kill(pids[i], signal_number) == 0) {
             signalled++;
         } else if (errno != ESRCH) {
             return -1;
@@ -198,7 +195,7 @@ ninit_pid1_cleanup_orphaned_children(unsigned int grace_msec)
                 kill_phase = 1;
         }
 
-        if (signal_child_groups(pids, count,
+        if (signal_children(pids, count,
                                 kill_phase ? SIGKILL : SIGTERM) < 0) {
             int saved_errno = errno;
             free(pids);
