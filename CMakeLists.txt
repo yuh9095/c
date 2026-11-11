@@ -186,4 +186,47 @@ if(BUILD_TESTING AND NINIT_BUILD_TESTS)
     target_link_libraries(test-manager-child-reaper PRIVATE ninit-manager-core)
     target_compile_options(test-manager-child-reaper PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME manager-child-reaper COMMAND test-manager-child-reaper)
+
+    # Keep fast, privilege-free tests separate from process/namespace tests.
+    set_tests_properties(
+        log-level-names
+        ipc-protocol
+        ipc-channel
+        environment-detection
+        unit-file
+        dependency-plan
+        PROPERTIES LABELS "unit"
+    )
+
+    set_tests_properties(
+        pid1-runtime
+        mount-manager
+        pid1-setup
+        pid1-events
+        manager-spawn
+        manager-supervisor
+        boot-coordinator
+        unit-manager
+        job-manager
+        service-executor
+        service-runtime
+        manager-child-reaper
+        PROPERTIES LABELS "component"
+    )
+
+    set_tests_properties(
+        pid1-namespace-manager-crash
+        PROPERTIES LABELS "namespace;integration"
+    )
+
+    # Every test has a finite upper bound; namespace tests retain their
+    # stricter dedicated timeout above.
+    set_tests_properties(
+        log-level-names ipc-protocol ipc-channel pid1-runtime
+        environment-detection mount-manager pid1-setup pid1-events
+        manager-spawn manager-supervisor boot-coordinator unit-manager
+        unit-file dependency-plan job-manager service-executor
+        service-runtime manager-child-reaper
+        PROPERTIES TIMEOUT 15
+    )
 endif()
