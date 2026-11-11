@@ -3,7 +3,7 @@
 本仓库有两套互相独立的 CI：
 
 - `.github/workflows/ci.yml`：GitHub-hosted runner 上的 glibc/musl 构建和普通单元测试。
-- `.github/workflows/droidspaces-container.yml`：在真实 Droidspaces Linux 容器内运行的 ARM64 集成测试，必须成功创建嵌套 mount/PID namespace；不能像普通 CI 一样把该测试标记为 skipped。
+- `.github/workflows/droidspaces-container.yml`（工作流名称：`Droidspaces Linux integration`）：在真实 Droidspaces Linux 容器内运行的 ARM64 集成测试，必须成功创建嵌套 mount/PID namespace；不能像普通 CI 一样把该测试标记为 skipped。
 
 ## 运行模型
 
@@ -48,10 +48,10 @@ unshare --user --map-root-user --mount --pid --fork --mount-proc true
 
 ## 工作流行为
 
-- 触发方式：可信分支的 push，或手动 `workflow_dispatch`。
+- 触发方式：仅 `bootstrap/project-skeleton` 分支的 push，或手动 `workflow_dispatch`。如需测试其他可信分支，应显式修改工作流的 `push.branches`，不要开放给 fork PR。
 - 不监听 `pull_request`：self-hosted runner 位于有权限的 Droidspaces 容器内，不能让来自 fork 的不可信代码自动获得执行机会。
 - Runner 标签：`[self-hosted, linux, ARM64, droidspaces]`。
-- 工作流会编译 Ninit，运行全部 CTest，并设置 `NINIT_REQUIRE_PID_NAMESPACE_TEST=1`。如果 PID/mount namespace 测试无法启动，整个 job 失败，不会报告绿色的 skipped。
+- 工作流首先检查 ARM64、Linux 基础信息和必需工具，再实际探测嵌套 PID/mount namespace（先直接模式，失败后尝试 rootless user namespace）；两种方式都失败则立即失败。随后编译 Ninit，运行全部 CTest，并设置 `NINIT_REQUIRE_PID_NAMESPACE_TEST=1`。如果 PID/mount namespace 测试无法启动，整个 job 失败，不会报告绿色的 skipped。
 - 真实集成测试会让 Ninit 在嵌套 PID namespace 中成为 PID 1，触发 Manager 崩溃，验证 PID 1 清理遗留服务后代并重启 Manager，最后通过容器式 SIGTERM 路径退出。它不会调用宿主机 reboot。
 
 ## 安全边界
