@@ -29,6 +29,7 @@ struct unit_file_data {
     struct string_list before;
     struct string_list exec_start;
     struct string_list exec_stop;
+    int oneshot;
     unsigned int seen;
 };
 
@@ -39,7 +40,8 @@ enum {
     SEEN_AFTER = 1u << 3,
     SEEN_BEFORE = 1u << 4,
     SEEN_EXEC_START = 1u << 5,
-    SEEN_EXEC_STOP = 1u << 6
+    SEEN_EXEC_STOP = 1u << 6,
+    SEEN_TYPE = 1u << 7
 };
 
 static char *
@@ -239,6 +241,19 @@ parse_property(struct unit_file_data *data, enum section section,
         return parse_name_list(value, list);
     }
 
+    if (section == SECTION_SERVICE && strcmp(key, "Type") == 0) {
+        if (mark_seen(data, SEEN_TYPE) < 0)
+            return -1;
+        if (strcmp(value, "simple") == 0)
+            data->oneshot = 0;
+        else if (strcmp(value, "oneshot") == 0)
+            data->oneshot = 1;
+        else {
+            errno = EINVAL;
+            return -1;
+        }
+        return 0;
+    }
     if (section == SECTION_SERVICE && strcmp(key, "ExecStart") == 0) {
         if (mark_seen(data, SEEN_EXEC_START) < 0)
             return -1;
@@ -377,6 +392,7 @@ ninit_unit_file_load(struct ninit_unit_manager *manager, const char *path)
     spec.exec_start_argc = data.exec_start.count;
     spec.exec_stop_argv = (const char *const *) data.exec_stop.items;
     spec.exec_stop_argc = data.exec_stop.count;
+    spec.oneshot = data.oneshot;
     spec.requires = (const char *const *) data.requires.items;
     spec.requires_count = data.requires.count;
     spec.wants = (const char *const *) data.wants.items;
