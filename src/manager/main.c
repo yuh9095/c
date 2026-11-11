@@ -166,26 +166,40 @@ stop_service_children(struct ninit_service_runtime *runtime,
 }
 
 static int
-run_shutdown_target(struct ninit_service_runtime *runtime,
-                    struct ninit_manager_child_reaper *reaper,
-                    struct ninit_job_manager *jobs,
-                    const struct ninit_dependency_plan *plan)
+validate_shutdown_plan(const struct ninit_dependency_plan *plan)
 {
-    uint64_t job_id;
     size_t i;
-    int escalation = 0;
 
     if (plan == NULL)
         return 0;
     for (i = 0; i < ninit_dependency_plan_count(plan); ++i) {
         const struct ninit_unit *unit = ninit_dependency_plan_unit(plan, i);
         if (unit == NULL ||
+            (unit->type != NINIT_UNIT_TARGET &&
+             unit->type != NINIT_UNIT_SERVICE) ||
             (unit->type == NINIT_UNIT_SERVICE && !unit->oneshot)) {
             errno = EOPNOTSUPP;
-            fprintf(stderr,
-                    "ninit-manager: shutdown.target only supports oneshot services; refusing unsafe daemon start\n");
             return -1;
         }
+    }
+    return 0;
+}
+
+static int
+run_shutdown_target(struct ninit_service_runtime *runtime,
+                    struct ninit_manager_child_reaper *reaper,
+                    struct ninit_job_manager *jobs,
+                    const struct ninit_dependency_plan *plan)
+{
+    uint64_t job_id;
+    int escalation = 0;
+
+    if (plan == NULL)
+        return 0;
+    if (validate_shutdown_plan(plan) < 0) {
+        fprintf(stderr,
+                "ninit-manager: shutdown.target only supports oneshot services; refusing unsafe daemon start\n");
+        return -1;
     }
     if (ninit_job_manager_submit_start(jobs, plan, 4, &job_id) < 0)
         return -1;
@@ -354,6 +368,13 @@ run_manager(int fd, const char *unit_dir, const char *target)
             if (ninit_dependency_plan_build(units, "shutdown.target",
                                             &shutdown_plan) < 0) {
                 fprintf(stderr, "ninit-manager: cannot build shutdown.target: %s\n",
+                        strerror(errno));
+                goto cleanup;
+            }
+            if (validate_shutdown_plan(shutdown_plan) < 0) {
+                fprintf(stderr,
+                        "ninit-manager: invalid shutdown.target closure: "
+                        "only oneshot services are allowed (%s)\n",
                         strerror(errno));
                 goto cleanup;
             }
