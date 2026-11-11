@@ -30,6 +30,13 @@ int ninit_manager_child_reaper_drain(
     ninit_manager_child_exit_callback callback,
     void *userdata);
 
+/* Return 1/0 for whether adopted/direct children remain, -1 on error. */
+int ninit_manager_child_reaper_has_children(
+    struct ninit_manager_child_reaper *reaper);
+/* Signal every current direct child process group; returns groups signalled. */
+int ninit_manager_child_reaper_signal_children(
+    struct ninit_manager_child_reaper *reaper, int signal_number);
+
 void ninit_manager_child_reaper_destroy(
     struct ninit_manager_child_reaper *reaper);
 
