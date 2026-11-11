@@ -235,8 +235,7 @@ ninit_service_runtime_expire_stop_timeouts(struct ninit_service_runtime *runtime
         p->stop_success = 0;
         if (p->stop_error == 0)
             p->stop_error = ETIMEDOUT;
-        if (p->stop_phase == STOP_PHASE_EXECSTOP ||
-            p->stop_phase == STOP_PHASE_TERMINATING) {
+        if (p->stop_phase == STOP_PHASE_EXECSTOP) {
             if (p->stop_pid > 0 &&
                 kill(-p->stop_pid, SIGTERM) < 0 && errno != ESRCH)
                 return -1;
