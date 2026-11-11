@@ -4,6 +4,8 @@
 #include <string.h>
 
 #include <ninit/ipc_protocol.h>
+#include <ninit/ipc_channel.h>
+#include <errno.h>
 
 #define MANAGER_STABLE_RESET_MS 60000U
 
@@ -211,6 +213,44 @@ ninit_manager_supervisor_tick(
     supervisor->started_at = *now;
     supervisor->state = NINIT_MANAGER_RUNNING;
     return NINIT_IPC_OK;
+}
+
+int
+ninit_manager_supervisor_shutdown_action(
+    struct ninit_manager_supervisor *supervisor,
+    enum ninit_manager_shutdown_action action)
+{
+    const char *name;
+    struct ninit_ipc_header header;
+    int result = NINIT_IPC_OK;
+
+    if (supervisor == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    switch (action) {
+    case NINIT_MANAGER_SHUTDOWN_HALT: name = "halt"; break;
+    case NINIT_MANAGER_SHUTDOWN_POWEROFF: name = "poweroff"; break;
+    case NINIT_MANAGER_SHUTDOWN_REBOOT: name = "reboot"; break;
+    default: errno = EINVAL; return -1;
+    }
+
+    if (supervisor->process.ipc_fd >= 0) {
+        memset(&header, 0, sizeof(header));
+        header.version = NINIT_IPC_VERSION;
+        header.type = NINIT_IPC_MSG_SHUTDOWN;
+        header.payload_size = (uint32_t) strlen(name);
+        result = ninit_ipc_send(supervisor->process.ipc_fd, &header, name);
+    }
+    supervisor->stopping = 1;
+    ninit_manager_disconnect(&supervisor->process);
+    supervisor->state = supervisor->process.pid > 0
+        ? NINIT_MANAGER_STOPPING : NINIT_MANAGER_STOPPED;
+    if (result != NINIT_IPC_OK) {
+        errno = EIO;
+        return -1;
+    }
+    return 0;
 }
 
 void
