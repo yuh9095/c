@@ -236,17 +236,19 @@ only with an explicitly permissive host policy and observable effective
 capability but never authorizes a host-level operation; UNKNOWN denies both.
 PID 1 handles SIGINT as an orderly restart request and SIGTERM/SIGPWR as an
 orderly poweroff request. It first asks Manager to execute the dependency-aware
-Stop Job (including ExecStop), waits for Manager to exit, re-probes current
-capabilities, authorizes the operation according to the environment policy,
-syncs storage, and then calls Linux `reboot(2)` with `RB_AUTOBOOT` or
-`RB_POWER_OFF`. In a container, this deliberately relies on Linux PID
-namespace reboot semantics: the namespace init requests shutdown/restart of
-its own PID namespace; Ninit does not call a host runtime API or signal the
-host init. The kernel and container runtime determine whether the syscall is
-permitted and how the parent namespace is notified. A failed or denied reboot
-request is logged; PID 1 remains alive and resumes Manager supervision rather
-than exiting. The startup capability snapshot is diagnostic only; shutdown
-always performs a fresh probe immediately before the syscall. Do not treat
+Stop Job (including ExecStop), and waits for Manager to finish. On a HOST
+system, it re-probes current capabilities, requires the explicit host policy
+and effective `CAP_SYS_BOOT`, syncs storage, and calls Linux `reboot(2)` with
+`RB_AUTOBOOT` or `RB_POWER_OFF`. A VM guest uses the guest shutdown gate and
+its own guest kernel reboot operation. A CONTAINER follows the systemd
+container fallback model instead: after the same orderly Stop Job and `sync()`,
+PID 1 exits successfully and lets the container runtime own the stop/restart
+operation. It does not call `reboot(2)` from a container, because containers
+may lack a private PID namespace or `CAP_SYS_BOOT`; a privileged container
+must not be able to turn an init request into an accidental host reboot.
+UNKNOWN environments authorize neither host nor guest shutdown. The startup
+capability snapshot is diagnostic only; host/VM shutdown always performs a
+fresh probe immediately before the syscall. Do not treat
 environment detection as a complete security boundary or infer capabilities
 from a container name.
 
