@@ -108,7 +108,7 @@ stop_service_children(struct ninit_service_runtime *runtime,
                  info.state == NINIT_JOB_CANCELLED)) {
                 if (ninit_service_runtime_tracked_count(runtime) == 0)
                     break;
-                if (defer_remaining)
+                if (defer_remaining && info.state == NINIT_JOB_SUCCEEDED)
                     return 0;
                 if (!term_broadcast) {
                     fprintf(stderr,
