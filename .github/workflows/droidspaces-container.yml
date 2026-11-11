@@ -77,7 +77,7 @@ jobs:
           versions = []
           for href in hrefs:
               decoded = unquote(html.unescape(href))
-              if re.fullmatch(r"\\d{8}_\\d{2}:\\d{2}/", decoded):
+              if re.fullmatch(r"\d{8}_\\d{2}:\\d{2}/", decoded):
                   versions.append(decoded)
           if not versions:
               raise SystemExit("No dated Ubuntu Noble rootfs image found")
