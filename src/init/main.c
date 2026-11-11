@@ -32,6 +32,7 @@ enum shutdown_action {
 struct init_context {
     struct ninit_manager_supervisor *supervisor;
     int stopping;
+    int exit_requested;
     enum shutdown_action action;
 };
 
@@ -110,12 +111,13 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
 
 static int
 perform_shutdown(const struct ninit_environment_policy *policy,
+                 const struct ninit_environment *environment,
                  enum shutdown_action action)
 {
     struct ninit_environment_capabilities capabilities;
     int command;
 
-    if (policy == NULL || action == SHUTDOWN_NONE) {
+    if (policy == NULL || environment == NULL || action == SHUTDOWN_NONE) {
         errno = EINVAL;
         return -1;
     }
@@ -127,6 +129,11 @@ perform_shutdown(const struct ninit_environment_policy *policy,
         if (ninit_environment_authorize_host_shutdown(
                 policy, &capabilities) < 0)
             return -1;
+    } else if (environment->kind == NINIT_ENVIRONMENT_CONTAINER) {
+        /* The runtime owns container lifecycle: stop services, then exit PID 1.
+         * Never rely on CAP_SYS_BOOT or risk rebooting the host from a container. */
+        sync();
+        return 1;
     } else if (ninit_environment_authorize_guest_shutdown(
                    policy, &capabilities) < 0) {
         return -1;
@@ -145,27 +152,32 @@ perform_shutdown(const struct ninit_environment_policy *policy,
 
 static void
 finish_shutdown_request(struct init_context *context,
-                        const struct ninit_environment_policy *policy)
+                        const struct ninit_environment_policy *policy,
+                        const struct ninit_environment *environment)
 {
     struct timespec now;
     int saved_errno;
+    int shutdown_result;
 
     if (context == NULL || !context->stopping ||
         context->supervisor->state != NINIT_MANAGER_STOPPED)
         return;
 
-    if (perform_shutdown(policy, context->action) == 0)
+    shutdown_result = perform_shutdown(policy, environment, context->action);
+    if (shutdown_result == 0)
         return;
+    if (shutdown_result > 0) {
+        fprintf(stderr, "ninit-init: container shutdown complete; exiting PID 1\n");
+        context->exit_requested = 1;
+        return;
+    }
 
     saved_errno = errno;
     fprintf(stderr, "ninit-init: %s request denied or failed: errno=%d (%s)\n",
             context->action == SHUTDOWN_RESTART ? "restart" : "poweroff",
             saved_errno, strerror(saved_errno));
 
-    /*
-     * PID 1 must remain alive if reboot(2) is rejected. Resume service
-     * supervision instead of returning from main and panicking the kernel.
-     */
+    /* Host/VM PID 1 remains alive if its reboot request is rejected. */
     context->stopping = 0;
     context->action = SHUTDOWN_NONE;
     if (get_monotonic_time(&now) < 0) {
@@ -453,6 +465,7 @@ main(int argc, char **argv)
 
     context.supervisor = &supervisor;
     context.stopping = 0;
+    context.exit_requested = 0;
     context.action = SHUTDOWN_NONE;
 
     if (ninit_manager_supervisor_start(&supervisor, &now) != 0) {
@@ -471,7 +484,7 @@ main(int argc, char **argv)
         if (context.stopping) {
             ninit_manager_supervisor_shutdown(&supervisor);
             if (supervisor.state == NINIT_MANAGER_STOPPED)
-                finish_shutdown_request(&context, &environment_policy);
+                finish_shutdown_request(&context, &environment_policy, &environment);
         } else {
             int tick_result = ninit_manager_supervisor_tick(&supervisor, &now);
             if (tick_result != 0 &&
@@ -479,6 +492,11 @@ main(int argc, char **argv)
                 fprintf(stderr, "ninit-init: manager restart limit reached\n");
                 goto shutdown;
             }
+        }
+
+        if (context.exit_requested) {
+            result = 0;
+            goto out;
         }
 
         if (supervisor.state == NINIT_MANAGER_FAILED) {
