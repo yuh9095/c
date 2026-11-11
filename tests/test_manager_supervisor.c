@@ -2,11 +2,13 @@
 
 #include <ninit/manager_supervisor.h>
 #include <ninit/ipc_protocol.h>
+#include <ninit/ipc_channel.h>
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -18,6 +20,31 @@ at_ms(time_t seconds, long milliseconds)
     value.tv_sec = seconds;
     value.tv_nsec = milliseconds * 1000000L;
     return value;
+}
+
+static void
+check_shutdown_action(enum ninit_manager_shutdown_action action,
+                      const char *expected)
+{
+    struct ninit_manager_supervisor supervisor;
+    struct ninit_ipc_header header;
+    unsigned char buffer[128];
+    const unsigned char *payload = NULL;
+    int sockets[2];
+
+    memset(&supervisor, 0, sizeof(supervisor));
+    assert(ninit_ipc_socketpair(sockets) == NINIT_IPC_OK);
+    supervisor.process.pid = 12345;
+    supervisor.process.ipc_fd = sockets[0];
+    supervisor.state = NINIT_MANAGER_RUNNING;
+    assert(ninit_manager_supervisor_shutdown_action(&supervisor, action) == 0);
+    assert(supervisor.state == NINIT_MANAGER_STOPPING);
+    assert(ninit_ipc_receive(sockets[1], buffer, sizeof(buffer),
+                             &header, &payload) == NINIT_IPC_OK);
+    assert(header.type == NINIT_IPC_MSG_SHUTDOWN);
+    assert(header.payload_size == strlen(expected));
+    assert(memcmp(payload, expected, strlen(expected)) == 0);
+    close(sockets[1]);
 }
 
 int
@@ -34,6 +61,9 @@ main(int argc, char **argv)
     FILE *unit_file;
 
     assert(argc == 2);
+    check_shutdown_action(NINIT_MANAGER_SHUTDOWN_HALT, "halt");
+    check_shutdown_action(NINIT_MANAGER_SHUTDOWN_POWEROFF, "poweroff");
+    check_shutdown_action(NINIT_MANAGER_SHUTDOWN_REBOOT, "reboot");
     assert(mkdtemp(directory) != NULL);
     assert(snprintf(unit_path, sizeof(unit_path), "%s/default.target",
                     directory) > 0);
