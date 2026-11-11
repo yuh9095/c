@@ -5,7 +5,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
-#include <stddef.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -15,6 +14,11 @@ struct reap_result {
     pid_t expected_pid;
     int called;
     int status;
+};
+
+struct orphan_tree_pids {
+    pid_t service;
+    pid_t background;
 };
 
 static void
@@ -60,10 +64,10 @@ test_cleanup_after_manager_crash(void)
     int ready_pipe[2];
     int previous_subreaper = 0;
     int manager_status;
-    int service_status;
+    int child_status;
     pid_t manager;
-    pid_t service;
     pid_t reaped;
+    struct orphan_tree_pids tree;
 
     assert(prctl(PR_GET_CHILD_SUBREAPER, &previous_subreaper) == 0);
     assert(prctl(PR_SET_CHILD_SUBREAPER, 1) == 0);
@@ -79,17 +83,16 @@ test_cleanup_after_manager_crash(void)
             _exit(90);
         if (service_child == 0) {
             pid_t background_child;
-            struct orphan_tree_pids ready;
             (void) setpgid(0, 0);
             background_child = fork();
             if (background_child < 0)
                 _exit(92);
             if (background_child == 0) {
                 (void) signal(SIGTERM, SIG_IGN);
-                ready.service = getppid();
-                ready.background = getpid();
-                if (write(ready_pipe[1], &ready, sizeof(ready)) !=
-                    (ssize_t) sizeof(ready))
+                tree.service = getppid();
+                tree.background = getpid();
+                if (write(ready_pipe[1], &tree, sizeof(tree)) !=
+                    (ssize_t) sizeof(tree))
                     _exit(93);
                 close(ready_pipe[1]);
                 for (;;)
@@ -118,14 +121,15 @@ test_cleanup_after_manager_crash(void)
     /*
      * The test process acts as a subreaper to model PID 1: killing Manager
      * reparents its service and background descendant to this process.
+     * The background descendant ignores SIGTERM, requiring SIGKILL escalation.
      */
     assert(ninit_pid1_cleanup_orphaned_children(100) == 0);
     errno = 0;
-    reaped = waitpid(tree.service, &service_status, WNOHANG);
+    reaped = waitpid(tree.service, &child_status, WNOHANG);
     assert(reaped == -1);
     assert(errno == ECHILD);
     errno = 0;
-    reaped = waitpid(tree.background, &service_status, WNOHANG);
+    reaped = waitpid(tree.background, &child_status, WNOHANG);
     assert(reaped == -1);
     assert(errno == ECHILD);
     assert(ninit_pid1_reap_children(NULL, NULL) == 0);
@@ -136,7 +140,6 @@ test_cleanup_after_manager_crash(void)
 int
 main(void)
 {
-    /* The test process is not PID 1 in the usual test environment. */
     if (getpid() != 1)
         assert(ninit_pid1_is_init() == 0);
 
