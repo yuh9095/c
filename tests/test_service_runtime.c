@@ -50,7 +50,6 @@ main(void)
 
     assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
     assert(pid > 0);
-    assert(getpgid(pid) == pid);
     assert(ninit_service_runtime_exec_pending_count(runtime) == 1);
     assert(ninit_service_runtime_exec_pending_at(
                runtime, 0, &pending_pid, &pending_fd) == 0);
@@ -66,6 +65,7 @@ main(void)
     assert((exec_poll.revents & (POLLIN | POLLHUP)) != 0);
     result = ninit_service_runtime_check_exec(runtime, pid);
     assert(result == 1);
+    assert(getpgid(pid) == pid);
     assert(ninit_service_runtime_exec_pending_count(runtime) == 0);
     assert(ninit_service_runtime_exec_pending_at(
                runtime, 0, &pending_pid, &pending_fd) == -1);
@@ -84,7 +84,6 @@ main(void)
     assert(ninit_service_runtime_exec_pending_at(
                runtime, 0, &stop_pid, &pending_fd) == 0);
     assert(stop_pid > 0 && stop_pid != pid);
-    assert(getpgid(stop_pid) == stop_pid);
     exec_poll.fd = pending_fd;
     exec_poll.events = POLLIN;
     exec_poll.revents = 0;
@@ -93,6 +92,7 @@ main(void)
     } while (result < 0 && errno == EINTR);
     assert(result == 1);
     assert(ninit_service_runtime_check_exec(runtime, stop_pid) == 1);
+    assert(getpgid(stop_pid) == stop_pid);
     assert(waitpid(stop_pid, &status, 0) == stop_pid);
     assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
     assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
