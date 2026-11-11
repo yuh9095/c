@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <sys/reboot.h>
 
 #define DEFAULT_MANAGER_PATH "/usr/bin/ninit-manager"
 #define DEFAULT_CONSOLE_PATH "/dev/console"
@@ -20,9 +21,16 @@
 #define DEFAULT_TARGET "default.target"
 #define DEFAULT_ENVIRONMENT "auto"
 
+enum shutdown_action {
+    SHUTDOWN_NONE = 0,
+    SHUTDOWN_POWER_OFF,
+    SHUTDOWN_RESTART
+};
+
 struct init_context {
     struct ninit_manager_supervisor *supervisor;
     int stopping;
+    enum shutdown_action action;
 };
 
 static int
@@ -62,11 +70,19 @@ handle_signal(int signal_number, void *userdata)
 {
     struct init_context *context = userdata;
 
-    if (signal_number == SIGTERM || signal_number == SIGINT
+    if (context->action != SHUTDOWN_NONE)
+        return;
+
+    if (signal_number == SIGINT) {
+        /* Ctrl-Alt-Del style request: orderly stop followed by restart. */
+        context->action = SHUTDOWN_RESTART;
+        context->stopping = 1;
+    } else if (signal_number == SIGTERM
 #ifdef SIGPWR
-        || signal_number == SIGPWR
+               || signal_number == SIGPWR
 #endif
     ) {
+        context->action = SHUTDOWN_POWER_OFF;
         context->stopping = 1;
     }
 }
@@ -88,6 +104,75 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
     }
     (void) ninit_manager_supervisor_child_exited(
         context->supervisor, pid, wait_status, &now);
+}
+
+static int
+perform_shutdown(const struct ninit_environment_policy *policy,
+                 enum shutdown_action action)
+{
+    struct ninit_environment_capabilities capabilities;
+    int command;
+
+    if (policy == NULL || action == SHUTDOWN_NONE) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(&capabilities, 0, sizeof(capabilities));
+    if (ninit_environment_probe_capabilities("/", &capabilities) < 0)
+        return -1;
+
+    if (policy->allow_host_shutdown) {
+        if (ninit_environment_authorize_host_shutdown(
+                policy, &capabilities) < 0)
+            return -1;
+    } else if (ninit_environment_authorize_guest_shutdown(
+                   policy, &capabilities) < 0) {
+        return -1;
+    }
+
+    command = action == SHUTDOWN_RESTART ? RB_AUTOBOOT : RB_POWER_OFF;
+    /* Match normal init shutdown ordering: services first, then sync storage. */
+    sync();
+    if (reboot(command) < 0)
+        return -1;
+
+    /* Linux reboot(2) is not expected to return after a successful request. */
+    errno = EIO;
+    return -1;
+}
+
+static void
+finish_shutdown_request(struct init_context *context,
+                        const struct ninit_environment_policy *policy)
+{
+    struct timespec now;
+    int saved_errno;
+
+    if (context == NULL || !context->stopping ||
+        context->supervisor->state != NINIT_MANAGER_STOPPED)
+        return;
+
+    if (perform_shutdown(policy, context->action) == 0)
+        return;
+
+    saved_errno = errno;
+    fprintf(stderr, "ninit-init: %s request denied or failed: errno=%d (%s)\n",
+            context->action == SHUTDOWN_RESTART ? "restart" : "poweroff",
+            saved_errno, strerror(saved_errno));
+
+    /*
+     * PID 1 must remain alive if reboot(2) is rejected. Resume service
+     * supervision instead of returning from main and panicking the kernel.
+     */
+    context->stopping = 0;
+    context->action = SHUTDOWN_NONE;
+    if (get_monotonic_time(&now) < 0) {
+        perror("ninit-init: clock_gettime after failed shutdown");
+        return;
+    }
+    if (ninit_manager_supervisor_start(context->supervisor, &now) != 0)
+        fprintf(stderr, "ninit-init: manager restart after failed shutdown "
+                "scheduled or failed\n");
 }
 
 static void
@@ -366,6 +451,7 @@ main(int argc, char **argv)
 
     context.supervisor = &supervisor;
     context.stopping = 0;
+    context.action = SHUTDOWN_NONE;
 
     if (ninit_manager_supervisor_start(&supervisor, &now) != 0) {
         fprintf(stderr, "ninit-init: manager start failed; retry scheduled\n");
@@ -382,10 +468,8 @@ main(int argc, char **argv)
 
         if (context.stopping) {
             ninit_manager_supervisor_shutdown(&supervisor);
-            if (supervisor.state == NINIT_MANAGER_STOPPED) {
-                result = 0;
-                break;
-            }
+            if (supervisor.state == NINIT_MANAGER_STOPPED)
+                finish_shutdown_request(&context, &environment_policy);
         } else {
             int tick_result = ninit_manager_supervisor_tick(&supervisor, &now);
             if (tick_result != 0 &&
@@ -415,10 +499,8 @@ main(int argc, char **argv)
         }
 
         if (context.stopping &&
-            supervisor.state == NINIT_MANAGER_STOPPED) {
-            result = 0;
-            break;
-        }
+            supervisor.state == NINIT_MANAGER_STOPPED)
+            finish_shutdown_request(&context, &environment_policy);
     }
     goto out;
 
