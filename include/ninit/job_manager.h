@@ -29,7 +29,9 @@ void ninit_job_manager_destroy(struct ninit_job_manager *manager);
 int ninit_job_manager_submit_start(struct ninit_job_manager *manager,
     const struct ninit_dependency_plan *plan, size_t max_parallel,
     uint64_t *job_id);
-/* Submit a Stop transaction in reverse dependency-wave and reverse registration order. */
+/* Submit a shutdown Stop transaction in reverse dependency order. Services
+ * tagged -shutdown or -stop are excluded from the ordered stop phase and are
+ * left for the final shutdown signal. */
 int ninit_job_manager_submit_stop(struct ninit_job_manager *manager,
     const struct ninit_dependency_plan *plan, size_t max_parallel,
     uint64_t *job_id);
