@@ -149,6 +149,25 @@ ninit-manager --ipc-fd 3 --unit-dir /etc/ninit/units --target default.target
 
 不提供这两个参数时，Manager 保持原有的仅 IPC/监督模式。当前 PID1 的 `ninit_manager_start()` 尚未提供参数转发，因此这条原生启动路径还不能由 PID1 配置自动启用；下一步需要给 PID1—Manager 启动配置增加显式的 Unit 目录和目标字段，并补充端到端测试。该入口也还没有 sysinit/boot/default 多阶段协调、正常 Stop Job、服务进程组或重启策略。
 
+## Service Type and shutdown runlevel
+
+Service units accept `Type=simple` (the default) and `Type=oneshot`. A simple
+service Start Job is considered started after the exec-error handshake
+confirms `execvp()` succeeded; its process remains tracked as a daemon. A
+oneshot Start Job instead waits for the child-exit event and succeeds only for
+exit status zero. Both exec failures and non-zero/signal exits fail the job.
+
+An optional `shutdown.target` is discovered from the configured Unit directory.
+Its dependency closure is validated before startup; during orderly Manager
+shutdown it runs only after the normal active-service Stop Job has completed.
+Every Service in that closure must be `Type=oneshot`; Targets are no-op ordering
+nodes. This deliberately avoids starting persistent daemons after the normal
+services have already been stopped. `ExecStart` is the shutdown hook command;
+its child must finish before shutdown proceeds. Shutdown hook timeout policy,
+OpenRC-style `-shutdown`/`-stop` keywords, and `RC_RUNLEVEL`/`RC_REBOOT`
+environment variables remain future work. An absent `shutdown.target` is
+backward-compatible and simply omits this phase.
+
 ## Service Runtime（第一版）
 
 `include/ninit/service_runtime.h` 将 Job Manager 与 Service Executor 连接起来：
@@ -250,9 +269,17 @@ PID 1 exits successfully and lets the container runtime own the stop/restart
 operation. It does not call `reboot(2)` from a container, because containers
 may lack a private PID namespace or `CAP_SYS_BOOT`; a privileged container
 must not be able to turn an init request into an accidental host reboot.
-The current Ninit implementation does not yet provide a distinct OpenRC-style
-`shutdown` runlevel or service shutdown-exclusion keywords; it uses the existing
-reverse-dependency Stop Job. `halt`, `poweroff`, and `reboot` are distinct host/VM
+When the Unit directory contains `shutdown.target`, Manager builds its
+separate dependency plan at startup. On an orderly Manager IPC close it first
+stops the active startup plan in reverse dependency order, then enters the
+`shutdown.target` plan, matching OpenRC's stop-services-then-shutdown-runlevel
+sequence. Shutdown-runlevel Service units must declare `Type=oneshot`; simple
+services are rejected rather than accidentally daemonized during shutdown.
+Oneshot Start Jobs complete only after the process has exited with status zero,
+not merely after successful exec. If `shutdown.target` is absent, the shutdown
+runlevel phase is skipped. This first implementation does not yet implement
+OpenRC's `-shutdown`/`-stop` exclusion keywords or `RC_RUNLEVEL`/`RC_REBOOT`
+environment exports. `halt`, `poweroff`, and `reboot` remain distinct host/VM
 commands, while all three container actions exit PID 1 for the runtime to handle.
 UNKNOWN environments authorize neither host nor guest shutdown. The startup
 capability snapshot is diagnostic only; host/VM shutdown always performs a
