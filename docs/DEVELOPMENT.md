@@ -185,7 +185,9 @@ and a complete shutdown policy remain future work.
 ## Execution environment detection (initial)
 
 `include/ninit/environment.h` exposes an independent environment detector and a
-conservative startup policy. The first implementation follows the layered
+conservative startup policy. Host-level shutdown and guest-local shutdown are
+separate permissions; a container may stop/restart its own PID namespace
+without being authorized to reboot the host. The first implementation follows the layered
 approach used by systemd's `detect_container()` and OpenRC's
 `detect_container()`/`rc_sys` model:
 
@@ -225,18 +227,26 @@ flags are not proof that an operation is permitted, and every mount operation
 must still check existing mounts and handle kernel errors.
 
 PID 1 performs detection before console setup and consumes the policy
-for early pseudo-filesystem mount setup. `ninit_environment_authorize_host_shutdown()`
-is the common authorization gate for host reboot/poweroff callers: it requires
-an explicitly permissive environment policy plus an observable effective
-`CAP_SYS_BOOT`. Container, WSL guest, and UNKNOWN policies deny host-level
-shutdown. PID 1 reports this gate at startup; the current main loop does not
-issue a reboot/poweroff syscall, and signal-driven shutdown only stops the
-Manager. A future syscall path must re-probe capabilities immediately before
-the operation and handle syscall errors; the startup snapshot is diagnostic,
-not a durable authorization token. Service keyword filtering and guest-local
-shutdown remain future work. Do not treat the current detector as a complete
-security boundary or assume that a detected container name proves a specific
-capability set.
+for early pseudo-filesystem mount setup. `ninit_environment_authorize_host_shutdown()` authorizes host reboot/poweroff
+only with an explicitly permissive host policy and observable effective
+`CAP_SYS_BOOT`. Container and VM policies instead enable
+`ninit_environment_authorize_guest_shutdown()`, which requires the same
+capability but never authorizes a host-level operation; UNKNOWN denies both.
+PID 1 handles SIGINT as an orderly restart request and SIGTERM/SIGPWR as an
+orderly poweroff request. It first asks Manager to execute the dependency-aware
+Stop Job (including ExecStop), waits for Manager to exit, re-probes current
+capabilities, authorizes the operation according to the environment policy,
+syncs storage, and then calls Linux `reboot(2)` with `RB_AUTOBOOT` or
+`RB_POWER_OFF`. In a container, this deliberately relies on Linux PID
+namespace reboot semantics: the namespace init requests shutdown/restart of
+its own PID namespace; Ninit does not call a host runtime API or signal the
+host init. The kernel and container runtime determine whether the syscall is
+permitted and how the parent namespace is notified. A failed or denied reboot
+request is logged; PID 1 remains alive and resumes Manager supervision rather
+than exiting. The startup capability snapshot is diagnostic only; shutdown
+always performs a fresh probe immediately before the syscall. Do not treat
+environment detection as a complete security boundary or infer capabilities
+from a container name.
 
 
 ### Administrator environment override (rc_sys-style)
