@@ -100,6 +100,38 @@ main(void)
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 1);
 
+    /* Oneshot Start jobs complete only after the child exits successfully. */
+    memset(&spec, 0, sizeof(spec));
+    spec.name = "oneshot.service";
+    spec.type = NINIT_UNIT_SERVICE;
+    spec.exec_start_argv = (const char *const[]){ "/bin/true", NULL };
+    spec.exec_start_argc = 1;
+    spec.oneshot = 1;
+    assert(ninit_unit_manager_add(units, &spec) == 0);
+    assert(ninit_dependency_plan_build(units, "oneshot.service", &plan) == 0);
+    assert(ninit_job_manager_submit_start(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
+    assert(pid > 0);
+    assert(ninit_service_runtime_exec_pending_at(
+               runtime, 0, &pending_pid, &pending_fd) == 0);
+    assert(pending_pid == pid);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    exec_poll.revents = 0;
+    do {
+        result = poll(&exec_poll, 1, 3000);
+    } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, pid) == 1);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_RUNNING);
+    assert(waitpid(pid, &status, 0) == pid);
+    assert(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
+    assert(ninit_service_runtime_tracked_count(runtime) == 0);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 1);
+
     ninit_service_runtime_destroy(runtime);
     ninit_dependency_plan_destroy(plan);
     ninit_job_manager_destroy(jobs);
