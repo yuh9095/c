@@ -42,7 +42,8 @@ static int
 stop_service_children(struct ninit_service_runtime *runtime,
                       struct ninit_manager_child_reaper *reaper,
                       struct ninit_job_manager *jobs,
-                      const struct ninit_dependency_plan *plan)
+                      const struct ninit_dependency_plan *plan,
+                      int defer_remaining)
 {
     uint64_t stop_job_id = 0;
     int stop_submitted = 0;
@@ -62,9 +63,12 @@ stop_service_children(struct ninit_service_runtime *runtime,
     if (jobs != NULL && plan != NULL &&
         ninit_job_manager_submit_stop(jobs, plan, 4, &stop_job_id) == 0)
         stop_submitted = 1;
-    else if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
-        fprintf(stderr, "ninit-manager: SIGTERM broadcast failed: %s\n",
-                strerror(errno));
+    else {
+        if (ninit_service_runtime_signal_all(runtime, SIGTERM) < 0)
+            fprintf(stderr, "ninit-manager: SIGTERM broadcast failed: %s\n",
+                    strerror(errno));
+        term_broadcast = 1;
+    }
 
     for (;;) {
         size_t count = ninit_service_runtime_exec_pending_count(runtime);
@@ -104,6 +108,8 @@ stop_service_children(struct ninit_service_runtime *runtime,
                  info.state == NINIT_JOB_CANCELLED)) {
                 if (ninit_service_runtime_tracked_count(runtime) == 0)
                     break;
+                if (defer_remaining)
+                    return 0;
                 if (!term_broadcast) {
                     fprintf(stderr,
                             "ninit-manager: sending final SIGTERM to services excluded from ordered stop\n");
@@ -540,18 +546,24 @@ run_manager(int fd, const char *unit_dir, const char *target)
     }
 cleanup:
     {
-        int stopped = stop_service_children(runtime, reaper, jobs, plan);
+        int stopped = stop_service_children(runtime, reaper, jobs, plan,
+                                            exit_code == 0);
         if (stopped < 0)
             fprintf(stderr, "ninit-manager: failed to stop service children: %s\n",
                     strerror(errno));
-        else if (exit_code == 0 && shutdown_plan != NULL &&
-                 run_shutdown_target(runtime, reaper, jobs, shutdown_plan) < 0) {
-            int shutdown_error = errno;
-            fprintf(stderr, "ninit-manager: shutdown runlevel execution failed: %s\n",
-                    strerror(shutdown_error));
-            if (stop_service_children(runtime, reaper, jobs, plan) < 0)
+        else if (exit_code == 0) {
+            if (shutdown_plan != NULL &&
+                run_shutdown_target(runtime, reaper, jobs, shutdown_plan) < 0) {
+                int shutdown_error = errno;
                 fprintf(stderr,
-                        "ninit-manager: emergency cleanup after shutdown hook failure: %s\n",
+                        "ninit-manager: shutdown runlevel execution failed: %s\n",
+                        strerror(shutdown_error));
+            }
+            /* OpenRC -shutdown services are signalled only immediately before
+             * final exit, after the shutdown runlevel has run. */
+            if (stop_service_children(runtime, reaper, jobs, NULL, 0) < 0)
+                fprintf(stderr,
+                        "ninit-manager: final shutdown cleanup failed: %s\n",
                         strerror(errno));
         }
     }
