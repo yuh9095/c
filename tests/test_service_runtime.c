@@ -152,6 +152,47 @@ main(void)
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_FAILED && info.error_code == EIO);
 
+    /* A main service crash during ExecStop fails the stop and cancels the helper. */
+    ninit_dependency_plan_destroy(plan);
+    plan = NULL;
+    memset(&spec, 0, sizeof(spec));
+    spec.name = "stop-crash.service";
+    spec.type = NINIT_UNIT_SERVICE;
+    spec.exec_start_argv = argv;
+    spec.exec_start_argc = 2;
+    spec.exec_stop_argv = (const char *const[]){ "/bin/sleep", "30", NULL };
+    spec.exec_stop_argc = 2;
+    assert(ninit_unit_manager_add(units, &spec) == 0);
+    assert(ninit_dependency_plan_build(units, "stop-crash.service", &plan) == 0);
+    assert(ninit_job_manager_submit_start(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
+    assert(ninit_service_runtime_exec_pending_at(runtime, 0, &pending_pid,
+                                                  &pending_fd) == 0);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    do { result = poll(&exec_poll, 1, 3000); } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, pid) == 1);
+    assert(ninit_job_manager_submit_stop(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
+    assert(ninit_service_runtime_exec_pending_at(runtime, 0, &stop_pid,
+                                                  &pending_fd) == 0);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    do { result = poll(&exec_poll, 1, 3000); } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, stop_pid) == 1);
+    assert(kill(-pid, SIGKILL) == 0);
+    assert(waitpid(pid, &status, 0) == pid);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+    assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
+    assert(waitpid(stop_pid, &status, 0) == stop_pid);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+    assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
+    assert(ninit_service_runtime_tracked_count(runtime) == 0);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_FAILED && info.error_code == EIO);
+
     /* Job-scoped signalling must not depend on unrelated tracked children. */
     ninit_dependency_plan_destroy(plan);
     plan = NULL;
@@ -188,6 +229,8 @@ main(void)
     spec.type = NINIT_UNIT_SERVICE;
     spec.exec_start_argv = (const char *const[]){ "/bin/sleep", "30", NULL };
     spec.exec_start_argc = 2;
+    spec.exec_stop_argv = (const char *const[]){ "/bin/sleep", "30", NULL };
+    spec.exec_stop_argc = 2;
     spec.timeout_stop_msec = 20;
     assert(ninit_unit_manager_add(units, &spec) == 0);
     assert(ninit_dependency_plan_build(units, "timeout.service", &plan) == 0);
@@ -206,12 +249,22 @@ main(void)
     assert(kill(-pid, SIGSTOP) == 0);
     assert(ninit_job_manager_submit_stop(jobs, plan, 1, &job_id) == 0);
     assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
+    assert(ninit_service_runtime_exec_pending_at(runtime, 0, &stop_pid,
+                                                  &pending_fd) == 0);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    do { result = poll(&exec_poll, 1, 3000); } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, stop_pid) == 1);
     assert(ninit_service_runtime_stop_timeout_ms(runtime) >= 0);
     assert(poll(NULL, 0, 40) == 0);
     assert(ninit_service_runtime_expire_stop_timeouts(runtime) == 1);
     assert(waitpid(pid, &status, 0) == pid);
     assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
     assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
+    assert(waitpid(stop_pid, &status, 0) == stop_pid);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+    assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
     assert(ninit_service_runtime_tracked_count(runtime) == 0);
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_FAILED && info.error_code == ETIMEDOUT);
