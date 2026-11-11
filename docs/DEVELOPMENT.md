@@ -235,8 +235,12 @@ only with an explicitly permissive host policy and observable effective
 `ninit_environment_authorize_guest_shutdown()`, which requires the same
 capability but never authorizes a host-level operation; UNKNOWN denies both.
 PID 1 handles SIGINT as an orderly restart request and SIGTERM/SIGPWR as an
-orderly poweroff request. It first asks Manager to execute the dependency-aware
-Stop Job (including ExecStop), and waits for Manager to finish. On a HOST
+orderly poweroff request. It also accepts the systemd-compatible real-time
+requests: SIGRTMIN+3 means halt, SIGRTMIN+4 means poweroff, and SIGRTMIN+5
+means reboot. All requests enter the same dependency-aware Stop Job (including
+ExecStop) and wait for Manager to finish before the final action. This mirrors
+systemd's documented PID 1 signal interface; OpenRC's shutdown model likewise
+stops active services and enters a dedicated shutdown runlevel. On a HOST
 system, it re-probes current capabilities, requires the explicit host policy
 and effective `CAP_SYS_BOOT`, syncs storage, and calls Linux `reboot(2)` with
 `RB_AUTOBOOT` or `RB_POWER_OFF`. A VM guest uses the guest shutdown gate and
@@ -246,6 +250,10 @@ PID 1 exits successfully and lets the container runtime own the stop/restart
 operation. It does not call `reboot(2)` from a container, because containers
 may lack a private PID namespace or `CAP_SYS_BOOT`; a privileged container
 must not be able to turn an init request into an accidental host reboot.
+The current Ninit implementation does not yet provide a distinct OpenRC-style
+`shutdown` runlevel or service shutdown-exclusion keywords; it uses the existing
+reverse-dependency Stop Job. `halt`, `poweroff`, and `reboot` are distinct host/VM
+commands, while all three container actions exit PID 1 for the runtime to handle.
 UNKNOWN environments authorize neither host nor guest shutdown. The startup
 capability snapshot is diagnostic only; host/VM shutdown always performs a
 fresh probe immediately before the syscall. Do not treat
