@@ -14,7 +14,7 @@ main(void)
     struct ninit_unit_spec service = {
         "network.service", "Network service", NINIT_UNIT_SERVICE,
         exec_argv, 1, requires, 1, NULL, 0, NULL, 0, NULL, 0,
-        stop_argv, 2, NULL, 0
+        stop_argv, 2, 0
     };
     struct ninit_unit_spec target = {
         "local-fs.target", "Local filesystems", NINIT_UNIT_TARGET,
