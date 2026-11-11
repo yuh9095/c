@@ -32,6 +32,7 @@ struct unit_file_data {
     int oneshot;
     int keyword_no_shutdown;
     int keyword_no_stop;
+    unsigned int timeout_stop_msec;
     unsigned int seen;
 };
 
@@ -44,7 +45,8 @@ enum {
     SEEN_EXEC_START = 1u << 5,
     SEEN_EXEC_STOP = 1u << 6,
     SEEN_TYPE = 1u << 7,
-    SEEN_KEYWORDS = 1u << 8
+    SEEN_KEYWORDS = 1u << 8,
+    SEEN_TIMEOUT_STOP = 1u << 9
 };
 
 static char *
@@ -237,6 +239,37 @@ parse_openrc_keywords(struct unit_file_data *data, const char *value)
 }
 
 static int
+parse_timeout_stop(const char *value, unsigned int *milliseconds)
+{
+    char *end;
+    unsigned long amount;
+    unsigned long multiplier;
+
+    errno = 0;
+    amount = strtoul(value, &end, 10);
+    if (errno != 0 || end == value || amount == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (strcmp(end, "ms") == 0)
+        multiplier = 1;
+    else if (strcmp(end, "s") == 0 || *end == 0)
+        multiplier = 1000;
+    else if (strcmp(end, "min") == 0)
+        multiplier = 60000;
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    if (amount > 86400000UL / multiplier) {
+        errno = ERANGE;
+        return -1;
+    }
+    *milliseconds = (unsigned int)(amount * multiplier);
+    return 0;
+}
+
+static int
 parse_property(struct unit_file_data *data, enum section section,
                char *key, char *value)
 {
@@ -272,6 +305,11 @@ parse_property(struct unit_file_data *data, enum section section,
         return parse_name_list(value, list);
     }
 
+    if (section == SECTION_SERVICE && strcmp(key, "TimeoutStopSec") == 0) {
+        if (mark_seen(data, SEEN_TIMEOUT_STOP) < 0)
+            return -1;
+        return parse_timeout_stop(value, &data->timeout_stop_msec);
+    }
     if (section == SECTION_SERVICE && strcmp(key, "Keywords") == 0) {
         if (mark_seen(data, SEEN_KEYWORDS) < 0)
             return -1;
@@ -431,6 +469,7 @@ ninit_unit_file_load(struct ninit_unit_manager *manager, const char *path)
     spec.oneshot = data.oneshot;
     spec.keyword_no_shutdown = data.keyword_no_shutdown;
     spec.keyword_no_stop = data.keyword_no_stop;
+    spec.timeout_stop_msec = data.timeout_stop_msec;
     spec.requires = (const char *const *) data.requires.items;
     spec.requires_count = data.requires.count;
     spec.wants = (const char *const *) data.wants.items;
