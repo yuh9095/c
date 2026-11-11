@@ -273,13 +273,15 @@ may lack a private PID namespace or `CAP_SYS_BOOT`; a privileged container
 must not be able to turn an init request into an accidental host reboot.
 Service `[Service] Keywords=` accepts the OpenRC-compatible `-shutdown` and
 `-stop` tags. During the shutdown Stop Job, either tag excludes that service
-from ordered ExecStop/SIGTERM handling. Once the ordered Stop Job completes,
-remaining tracked services receive the final SIGTERM and then the bounded
-SIGKILL fallback. `-stop` is also intended to exclude services from future
+from ordered ExecStop/SIGTERM handling. After the ordered Stop Job, the shutdown.target runlevel executes while
+`-shutdown`/`-stop` services remain alive; only immediately before final exit
+do remaining tracked services receive SIGTERM and then the bounded SIGKILL
+fallback. `-stop` is also intended to exclude services from future
 runlevel transitions; only shutdown transitions exist in this implementation
-so far. Shutdown-target hook processes inherit `RC_RUNLEVEL=shutdown` and
-`RC_GOINGDOWN=YES`. `RC_REBOOT` is not exported yet because the current Manager
-IPC shutdown path does not carry the requested halt/poweroff/reboot action.
+so far. Shutdown-target hook processes inherit `RC_RUNLEVEL=shutdown`,
+`RC_GOINGDOWN=YES`, and `RC_REBOOT=YES` only for reboot requests (`NO` for halt
+and poweroff). PID 1 sends the action over the private Manager IPC channel before
+closing it, so the Manager can set this context before running shutdown hooks.
 
 When the Unit directory contains `shutdown.target`, Manager builds its
 separate dependency plan at startup. On an orderly Manager IPC close it first
