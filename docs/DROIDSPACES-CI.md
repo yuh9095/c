@@ -13,7 +13,7 @@
 3. 编译 Ninit，并将 `ninit-init`、`ninit-manager`、`ninitctl` 安装进 rootfs。
 4. 通过 Droidspaces 的 `--init=/usr/bin/ninit-init` 显式指定自定义 init，不能只依赖 `/sbin/init` 软链接。
 5. 使用 `--allow-sandboxing` 开启容器内嵌套 user namespace 能力，供 PID/mount namespace 集成测试使用。
-6. 将工作区 bind-mount 到容器的 `/workspace`，在容器内安装 CTest 和 util-linux。
+6. 将工作区 bind-mount 到容器的 `$GITHUB_WORKSPACE` (宿主与容器内保持相同绝对路径)，在容器内安装 CTest 和 util-linux。
 7. 验证 `/proc/1/exe` 确实指向 `/usr/bin/ninit-init`，随后在 Droidspaces 容器内部运行整个 CTest 套件。
 8. 测试结束后停止容器；Runner 是临时 VM，不保留测试状态。
 
