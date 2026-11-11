@@ -605,17 +605,20 @@ ninit_service_runtime_child_exited(struct ninit_service_runtime *r,
     if (p->child_exited) { errno = EALREADY; return -1; }
     p->child_exited = 1;
     p->wait_status = wait_status;
+    /*
+     * Services are supervised as process groups. A leader exit, including an
+     * unexpected crash outside a Stop Job, must not leave daemonized children
+     * running without a Unit owner. The manager subreaper adopts and drains
+     * any descendants that survive this best-effort TERM.
+     */
+    if (kill(-p->pid, SIGTERM) < 0 && errno != ESRCH &&
+        p->stop_requested) {
+        p->stop_success = 0;
+        if (p->stop_error == 0)
+            p->stop_error = errno;
+    }
     if (p->stop_requested) {
         int clean_exit = WIFEXITED(wait_status) && WEXITSTATUS(wait_status) == 0;
-        /*
-         * Reap of the service leader does not imply its process group is
-         * empty. Terminate any surviving descendants before completing stop.
-         */
-        if (kill(-p->pid, SIGTERM) < 0 && errno != ESRCH) {
-            p->stop_success = 0;
-            if (p->stop_error == 0)
-                p->stop_error = errno;
-        }
         int expected_term = p->stop_signal_sent && WIFSIGNALED(wait_status) &&
                             WTERMSIG(wait_status) == SIGTERM;
         if (!clean_exit && !expected_term) {
