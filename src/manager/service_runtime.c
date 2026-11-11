@@ -108,8 +108,11 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
     if (process->stop_pid > 0)
         process->stop_pid = -1;
     if (!WIFEXITED(process->stop_wait_status) ||
-        WEXITSTATUS(process->stop_wait_status) != 0)
+        WEXITSTATUS(process->stop_wait_status) != 0) {
         process->stop_success = 0;
+        if (process->stop_error == 0)
+            process->stop_error = EIO;
+    }
     if (!process->stop_signal_sent) {
         if (kill(-process->pid, SIGTERM) == 0 || errno == ESRCH) {
             process->stop_signal_sent = 1;
@@ -468,8 +471,10 @@ ninit_service_runtime_check_exec(struct ninit_service_runtime *r, pid_t pid)
         e = result < 0 ? errno : 0;
         close(p->stop_exec_fd); p->stop_exec_fd = -1;
         p->stop_exec_confirmed = 1;
-        if (result < 0)
+        if (result < 0) {
             p->stop_success = 0;
+            p->stop_error = e;
+        }
         if (advance_stop_helper(r, p) < 0)
             return -1;
     } else {
