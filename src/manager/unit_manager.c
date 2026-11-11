@@ -135,6 +135,7 @@ unit_copy(const struct ninit_unit_spec *spec)
     unit->after_count = spec->after_count;
     unit->before_count = spec->before_count;
     unit->exec_stop_argc = spec->exec_stop_argc;
+    unit->oneshot = spec->oneshot;
     if (unit->name == NULL ||
         (spec->description != NULL && unit->description == NULL) ||
         copy_string_array(&unit->exec_start_argv, spec->exec_start_argv,
@@ -201,6 +202,8 @@ ninit_unit_manager_add(struct ninit_unit_manager *manager,
 
     if (manager == NULL || spec == NULL || !valid_name(spec->name) ||
         (spec->type != NINIT_UNIT_SERVICE && spec->type != NINIT_UNIT_TARGET) ||
+        (spec->oneshot != 0 && spec->oneshot != 1) ||
+        (spec->oneshot && spec->type != NINIT_UNIT_SERVICE) ||
         (spec->type == NINIT_UNIT_TARGET &&
          (spec->exec_start_argc != 0 || spec->exec_stop_argc != 0)) ||
         (spec->type == NINIT_UNIT_SERVICE &&
