@@ -523,9 +523,15 @@ cleanup:
             fprintf(stderr, "ninit-manager: failed to stop service children: %s\n",
                     strerror(errno));
         else if (exit_code == 0 && shutdown_plan != NULL &&
-                 run_shutdown_target(runtime, reaper, jobs, shutdown_plan) < 0)
+                 run_shutdown_target(runtime, reaper, jobs, shutdown_plan) < 0) {
+            int shutdown_error = errno;
             fprintf(stderr, "ninit-manager: shutdown runlevel execution failed: %s\n",
-                    strerror(errno));
+                    strerror(shutdown_error));
+            if (stop_service_children(runtime, reaper, jobs, plan) < 0)
+                fprintf(stderr,
+                        "ninit-manager: emergency cleanup after shutdown hook failure: %s\n",
+                        strerror(errno));
+        }
     }
     ninit_manager_child_reaper_destroy(reaper);
     ninit_service_runtime_destroy(runtime);
