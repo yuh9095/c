@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: droidspaces-linux-${{ github.ref }}
-  cancel-in-progress: false
+  # New commits supersede stale container integration runs.
+  cancel-in-progress: true
 
 jobs:
   droidspaces-linux:
