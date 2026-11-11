@@ -30,6 +30,8 @@ struct unit_file_data {
     struct string_list exec_start;
     struct string_list exec_stop;
     int oneshot;
+    int keyword_no_shutdown;
+    int keyword_no_stop;
     unsigned int seen;
 };
 
@@ -41,7 +43,8 @@ enum {
     SEEN_BEFORE = 1u << 4,
     SEEN_EXEC_START = 1u << 5,
     SEEN_EXEC_STOP = 1u << 6,
-    SEEN_TYPE = 1u << 7
+    SEEN_TYPE = 1u << 7,
+    SEEN_KEYWORDS = 1u << 8
 };
 
 static char *
@@ -206,6 +209,34 @@ free_data(struct unit_file_data *data)
 }
 
 static int
+parse_openrc_keywords(struct unit_file_data *data, const char *value)
+{
+    const char *cursor = value;
+
+    while (*cursor != '\0') {
+        const char *start;
+        size_t length;
+        while (isspace((unsigned char) *cursor))
+            ++cursor;
+        if (*cursor == '\0')
+            break;
+        start = cursor;
+        while (*cursor != '\0' && !isspace((unsigned char) *cursor))
+            ++cursor;
+        length = (size_t) (cursor - start);
+        if (length == 9 && memcmp(start, "-shutdown", 9) == 0)
+            data->keyword_no_shutdown = 1;
+        else if (length == 5 && memcmp(start, "-stop", 5) == 0)
+            data->keyword_no_stop = 1;
+        else {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int
 parse_property(struct unit_file_data *data, enum section section,
                char *key, char *value)
 {
@@ -241,6 +272,11 @@ parse_property(struct unit_file_data *data, enum section section,
         return parse_name_list(value, list);
     }
 
+    if (section == SECTION_SERVICE && strcmp(key, "Keywords") == 0) {
+        if (mark_seen(data, SEEN_KEYWORDS) < 0)
+            return -1;
+        return parse_openrc_keywords(data, value);
+    }
     if (section == SECTION_SERVICE && strcmp(key, "Type") == 0) {
         if (mark_seen(data, SEEN_TYPE) < 0)
             return -1;
@@ -393,6 +429,8 @@ ninit_unit_file_load(struct ninit_unit_manager *manager, const char *path)
     spec.exec_stop_argv = (const char *const *) data.exec_stop.items;
     spec.exec_stop_argc = data.exec_stop.count;
     spec.oneshot = data.oneshot;
+    spec.keyword_no_shutdown = data.keyword_no_shutdown;
+    spec.keyword_no_stop = data.keyword_no_stop;
     spec.requires = (const char *const *) data.requires.items;
     spec.requires_count = data.requires.count;
     spec.wants = (const char *const *) data.wants.items;
