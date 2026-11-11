@@ -9,7 +9,11 @@ if ! command -v unshare >/dev/null 2>&1; then
     echo "SKIP: unshare is unavailable"
     exit 77
 fi
-if ! unshare --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
+if unshare --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
+    namespace_args="--mount --pid --fork --mount-proc"
+elif unshare --user --map-root-user --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
+    namespace_args="--user --map-root-user --mount --pid --fork --mount-proc"
+else
     echo "SKIP: this runner cannot create mount/PID namespaces"
     exit 77
 fi
@@ -42,7 +46,10 @@ Type=oneshot
 ExecStart=$helper $tmp/manager-crashed $tmp/manager-restarted $tmp/descendant.lock
 EOF
 
-unshare --mount --pid --fork --mount-proc "$init" \
+# The namespace probe above selected either privileged or rootless isolation.
+# Intentional word splitting expands the fixed option list only.
+# shellcheck disable=SC2086
+unshare $namespace_args "$init" \
     --console "$tmp/console" --manager "$manager" \
     --unit-dir "$tmp/units" --target default.target \
     --environment container:other &
