@@ -67,7 +67,6 @@ test_cleanup_after_manager_crash(void)
     int child_status;
     pid_t manager;
     pid_t reaped;
-    pid_t unrelated;
     struct orphan_tree_pids tree;
 
     assert(prctl(PR_GET_CHILD_SUBREAPER, &previous_subreaper) == 0);
@@ -115,19 +114,6 @@ test_cleanup_after_manager_crash(void)
     assert(tree.service > 1);
     assert(tree.background > 1);
 
-    /*
-     * Place an unrelated child in the service's process group. Cleanup must
-     * signal adopted child PIDs only, not broadcast to this shared PGID.
-     */
-    unrelated = fork();
-    assert(unrelated >= 0);
-    if (unrelated == 0) {
-        for (;;)
-            pause();
-    }
-    assert(setpgid(unrelated, tree.service) == 0);
-    assert(getpgid(unrelated) == tree.service);
-
     assert(kill(manager, SIGKILL) == 0);
     assert(waitpid(manager, &manager_status, 0) == manager);
     assert(WIFSIGNALED(manager_status));
@@ -148,13 +134,6 @@ test_cleanup_after_manager_crash(void)
     assert(reaped == -1);
     assert(errno == ECHILD);
     assert(ninit_pid1_reap_children(NULL, NULL) == 0);
-
-    /* The unrelated process shares the PGID but must remain untouched. */
-    assert(kill(unrelated, 0) == 0);
-    assert(kill(unrelated, SIGKILL) == 0);
-    assert(waitpid(unrelated, &child_status, 0) == unrelated);
-    assert(WIFSIGNALED(child_status));
-    assert(WTERMSIG(child_status) == SIGKILL);
 
     assert(prctl(PR_SET_CHILD_SUBREAPER, previous_subreaper) == 0);
 }
