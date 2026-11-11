@@ -10,6 +10,11 @@
 #include <unistd.h>
 #include <ninit/service_executor.h>
 
+#define STOP_PHASE_NONE 0
+#define STOP_PHASE_EXECSTOP 1
+#define STOP_PHASE_TERMINATING 2
+#define STOP_PHASE_KILL_SENT 3
+
 struct service_process {
     pid_t pid;
     int exec_fd;
@@ -27,6 +32,7 @@ struct service_process {
     int stop_success;
     int stop_error;
     int stop_signal_sent;
+    int stop_phase;
     uint64_t stop_deadline_ms;
     int exec_confirmed;
     int start_completion_done;
@@ -99,6 +105,38 @@ complete_stop_if_ready(struct ninit_service_runtime *runtime,
 }
 
 static int
+begin_service_termination(struct service_process *process, uint64_t now)
+{
+    unsigned int timeout = process->unit->timeout_stop_msec != 0 ?
+                           process->unit->timeout_stop_msec : 30000U;
+    int first_error = 0;
+
+    if (!process->child_exited &&
+        kill(-process->pid, SIGTERM) < 0 && errno != ESRCH)
+        first_error = errno;
+    if (process->stop_pid > 0 &&
+        kill(-process->stop_pid, SIGTERM) < 0 && errno != ESRCH &&
+        first_error == 0)
+        first_error = errno;
+    process->stop_signal_sent = 1;
+    process->stop_phase = STOP_PHASE_TERMINATING;
+    if (now == 0 || UINT64_MAX - now < timeout) {
+        process->stop_deadline_ms = 0;
+        if (first_error == 0) first_error = EIO;
+    } else {
+        process->stop_deadline_ms = now + timeout;
+    }
+    if (first_error != 0) {
+        process->stop_success = 0;
+        if (process->stop_error == 0)
+            process->stop_error = first_error;
+        errno = first_error;
+        return -1;
+    }
+    return 0;
+}
+
+static int
 advance_stop_helper(struct ninit_service_runtime *runtime,
                     struct service_process *process)
 {
@@ -114,14 +152,10 @@ advance_stop_helper(struct ninit_service_runtime *runtime,
             process->stop_error = EIO;
     }
     /* ExecStop may itself have stopped the service; never signal a reaped leader. */
-    if (!process->child_exited && !process->stop_signal_sent) {
-        if (kill(-process->pid, SIGTERM) == 0 || errno == ESRCH) {
-            process->stop_signal_sent = 1;
-        } else {
-            process->stop_success = 0;
-            process->stop_error = errno;
-            process->stop_signal_sent = 1;
-        }
+    if (!process->stop_signal_sent) {
+        uint64_t now = monotonic_milliseconds();
+        if (begin_service_termination(process, now) < 0)
+            return -1;
     }
     return 0;
 }
@@ -196,14 +230,41 @@ ninit_service_runtime_expire_stop_timeouts(struct ninit_service_runtime *runtime
         struct service_process *p = &runtime->processes[i];
         if (p->stop_deadline_ms == 0 || p->stop_deadline_ms > now)
             continue;
-        p->stop_deadline_ms = 0;
+        if (p->stop_phase == STOP_PHASE_KILL_SENT)
+            continue;
         p->stop_success = 0;
-        p->stop_error = ETIMEDOUT;
-        if (p->stop_pid > 0 && kill(-p->stop_pid, SIGKILL) < 0 && errno != ESRCH)
-            return -1;
-        if (kill(-p->pid, SIGKILL) < 0 && errno != ESRCH)
-            return -1;
-        p->stop_signal_sent = 1;
+        if (p->stop_error == 0)
+            p->stop_error = ETIMEDOUT;
+        if (p->stop_phase == STOP_PHASE_EXECSTOP ||
+            p->stop_phase == STOP_PHASE_TERMINATING) {
+            if (p->stop_pid > 0 &&
+                kill(-p->stop_pid, SIGTERM) < 0 && errno != ESRCH)
+                return -1;
+            if (!p->child_exited &&
+                kill(-p->pid, SIGTERM) < 0 && errno != ESRCH)
+                return -1;
+            p->stop_signal_sent = 1;
+            p->stop_phase = STOP_PHASE_TERMINATING;
+            {
+                unsigned int timeout = p->unit->timeout_stop_msec != 0 ?
+                                       p->unit->timeout_stop_msec : 30000U;
+                if (UINT64_MAX - now < timeout) {
+                    p->stop_deadline_ms = 0;
+                    errno = EOVERFLOW;
+                    return -1;
+                }
+                p->stop_deadline_ms = now + timeout;
+            }
+        } else {
+            if (p->stop_pid > 0 &&
+                kill(-p->stop_pid, SIGKILL) < 0 && errno != ESRCH)
+                return -1;
+            if (!p->child_exited &&
+                kill(-p->pid, SIGKILL) < 0 && errno != ESRCH)
+                return -1;
+            p->stop_phase = STOP_PHASE_KILL_SENT;
+            p->stop_deadline_ms = 0;
+        }
         ++expired;
     }
     return expired;
@@ -337,6 +398,9 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                     return -1;
                 }
                 process->stop_deadline_ms = now + timeout;
+                process->stop_phase = unit->exec_stop_argc != 0 ?
+                                       STOP_PHASE_EXECSTOP :
+                                       STOP_PHASE_TERMINATING;
             }
             process->stop_job_id = job_id;
             process->stop_plan_index = plan_index;
@@ -355,9 +419,8 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                 process->stop_exec_confirmed = 1;
                 process->stop_child_exited = 1;
                 process->stop_success = 1;
-                if (kill(process->pid, SIGTERM) == 0 || errno == ESRCH)
-                    process->stop_signal_sent = 1;
-                else {
+                if (begin_service_termination(process,
+                                              monotonic_milliseconds()) < 0) {
                     int e = errno;
                     process->stop_requested = 0;
                     (void)ninit_job_manager_complete(runtime->jobs, job_id,
