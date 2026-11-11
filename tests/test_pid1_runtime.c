@@ -59,5 +59,19 @@ main(void)
 
     /* Reaping again with no children is a successful empty result. */
     assert(ninit_pid1_reap_children(NULL, NULL) == 0);
+
+    /*
+     * If a supervised Manager disappears, PID 1 must be able to terminate
+     * and reap service children that were reparented to it.
+     */
+    child = fork();
+    assert(child >= 0);
+    if (child == 0) {
+        (void) setpgid(0, 0);
+        for (;;)
+            pause();
+    }
+    assert(ninit_pid1_cleanup_orphaned_children(100) == 0);
+    assert(ninit_pid1_reap_children(NULL, NULL) == 0);
     return 0;
 }
