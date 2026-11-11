@@ -520,7 +520,11 @@ main(int argc, char **argv)
 
         if (context.stopping &&
             supervisor.state == NINIT_MANAGER_STOPPED)
-            finish_shutdown_request(&context, &environment_policy);
+            finish_shutdown_request(&context, &environment_policy, &environment);
+        if (context.exit_requested) {
+            result = 0;
+            goto out;
+        }
     }
     goto out;
 
