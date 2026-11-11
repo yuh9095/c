@@ -101,6 +101,8 @@ jobs:
           sudo droidspaces \
             --name="$CONTAINER_NAME" \
             --rootfs="$ROOTFS" \
+            --init=/usr/bin/ninit-init \
+            --allow-sandboxing \
             --net=host \
             --bind-mount="$GITHUB_WORKSPACE:/workspace" \
             --volatile \
@@ -108,9 +110,11 @@ jobs:
 
           # Verify that Droidspaces booted our init, not a shell or systemd.
           sudo droidspaces --name="$CONTAINER_NAME" run sh -ec '
-            printf "Container PID 1: "
-            cat /proc/1/comm
-            test "$(cat /proc/1/comm)" = "ninit-init"
+            printf "Container PID 1 executable: "
+            readlink /proc/1/exe
+            test "$(readlink /proc/1/exe)" = "/usr/bin/ninit-init"
+            printf "Container PID 1 command: "
+            tr "\000" " " </proc/1/cmdline; echo
             test -x /workspace/build/ninit-manager
           '
 
