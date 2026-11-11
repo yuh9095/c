@@ -20,6 +20,9 @@ void ninit_service_runtime_destroy(struct ninit_service_runtime *runtime);
 /* Send a signal to every tracked service child; does not reap children. */
 int ninit_service_runtime_signal_all(
     struct ninit_service_runtime *runtime, int signal_number);
+/* Signal only children started by the specified Job. */
+int ninit_service_runtime_signal_job(
+    struct ninit_service_runtime *runtime, uint64_t job_id, int signal_number);
 
 /*
  * Dispatch one Unit from a Start or Stop Job. Stop Jobs run an optional ExecStop command asynchronously, then send
