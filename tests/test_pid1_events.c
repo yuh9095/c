@@ -17,6 +17,9 @@ struct reap_result {
 
 struct signal_result {
     int child_seen;
+    int halt_seen;
+    int poweroff_seen;
+    int reboot_seen;
 };
 
 static void
@@ -34,9 +37,14 @@ record_signal(int signal_number, void *userdata)
 {
     struct signal_result *result = userdata;
 
-    if (signal_number == SIGCHLD) {
+    if (signal_number == SIGCHLD)
         result->child_seen++;
-    }
+    else if (signal_number == SIGRTMIN + 3)
+        result->halt_seen++;
+    else if (signal_number == SIGRTMIN + 4)
+        result->poweroff_seen++;
+    else if (signal_number == SIGRTMIN + 5)
+        result->reboot_seen++;
 }
 
 int
@@ -44,7 +52,7 @@ main(void)
 {
     struct reap_result result = { -1, 0, 0 };
     struct ninit_pid1_event_source events;
-    struct signal_result signals = { 0 };
+    struct signal_result signals = { 0, 0, 0, 0 };
     pid_t child;
     int event_count;
 
@@ -70,6 +78,15 @@ main(void)
     assert(result.called == 1);
     assert(WIFEXITED(result.status));
     assert(WEXITSTATUS(result.status) == 37);
+
+    assert(kill(getpid(), SIGRTMIN + 3) == 0);
+    assert(kill(getpid(), SIGRTMIN + 4) == 0);
+    assert(kill(getpid(), SIGRTMIN + 5) == 0);
+    assert(ninit_pid1_event_source_wait(
+        &events, 3000, record_signal, &signals, NULL, NULL) >= 3);
+    assert(signals.halt_seen == 1);
+    assert(signals.poweroff_seen == 1);
+    assert(signals.reboot_seen == 1);
 
     ninit_pid1_event_source_destroy(&events);
     return 0;
