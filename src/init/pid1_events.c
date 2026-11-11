@@ -55,6 +55,9 @@ build_signal_list(struct ninit_pid1_event_source *source)
 #ifdef SIGPWR
     source->signals[source->signal_count++] = SIGPWR;
 #endif
+    source->signals[source->signal_count++] = SIGRTMIN + 3;
+    source->signals[source->signal_count++] = SIGRTMIN + 4;
+    source->signals[source->signal_count++] = SIGRTMIN + 5;
 }
 
 int
