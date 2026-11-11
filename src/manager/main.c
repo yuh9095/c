@@ -77,7 +77,12 @@ stop_service_children(struct ninit_service_runtime *runtime,
         size_t i;
         int result;
         int timeout_ms = force_kill ? -1 : (term_broadcast ? 5000 : 30000);
+        int unit_timeout;
         struct ninit_job_info info;
+
+        unit_timeout = ninit_service_runtime_stop_timeout_ms(runtime);
+        if (unit_timeout >= 0 && (timeout_ms < 0 || unit_timeout < timeout_ms))
+            timeout_ms = unit_timeout;
 
         if (stop_submitted) {
             int dispatched;
@@ -152,6 +157,17 @@ stop_service_children(struct ninit_service_runtime *runtime,
             free(fds);
             return -1;
         }
+        {
+            int expired = ninit_service_runtime_expire_stop_timeouts(runtime);
+            if (expired < 0) {
+                free(pids);
+                free(fds);
+                return -1;
+            }
+            if (expired > 0)
+                fprintf(stderr, "ninit-manager: %d service stop deadline(s) expired; sending SIGKILL to their process groups\n", expired);
+        }
+
         if (result == 0 && !term_broadcast) {
             term_broadcast = 1;
             fprintf(stderr,
