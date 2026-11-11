@@ -545,8 +545,8 @@ run_manager(int fd, const char *unit_dir, const char *target)
                 memcmp(payload, "halt", 4) == 0) {
                 if (setenv("RC_REBOOT", "NO", 1) < 0)
                     goto cleanup;
-            } else if (header.payload_size == 7 &&
-                       memcmp(payload, "poweroff", 7) == 0) {
+            } else if (header.payload_size == 8 &&
+                       memcmp(payload, "poweroff", 8) == 0) {
                 if (setenv("RC_REBOOT", "NO", 1) < 0)
                     goto cleanup;
             } else if (header.payload_size == 6 &&
