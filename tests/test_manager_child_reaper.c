@@ -14,15 +14,21 @@ struct result {
     pid_t expected;
     int called;
     int status;
+    pid_t adopted_pid;
+    int adopted_status;
 };
 
 static void
 record_exit(pid_t pid, int status, void *userdata)
 {
     struct result *result = userdata;
-    assert(pid == result->expected);
-    result->called++;
-    result->status = status;
+    if (pid == result->expected) {
+        result->called++;
+        result->status = status;
+    } else {
+        result->adopted_pid = pid;
+        result->adopted_status = status;
+    }
 }
 
 int
@@ -30,7 +36,7 @@ main(void)
 {
     struct ninit_manager_child_reaper *reaper;
     struct pollfd descriptor;
-    struct result result = { -1, 0, 0 };
+    struct result result = { -1, 0, 0, -1, 0 };
     pid_t child;
     int poll_result;
     int count;
@@ -60,6 +66,54 @@ main(void)
     assert(WIFEXITED(result.status));
     assert(WEXITSTATUS(result.status) == 43);
     assert(ninit_manager_child_reaper_drain(reaper, NULL, NULL) == 0);
+
+    /*
+     * A grandchild orphaned by its intermediate parent must be adopted by
+     * this manager process and delivered through the same reaper callback.
+     */
+    {
+        pid_t intermediate = fork();
+        pid_t manager_pid = getpid();
+        assert(intermediate >= 0);
+        if (intermediate == 0) {
+            pid_t grandchild = fork();
+            if (grandchild < 0)
+                _exit(90);
+            if (grandchild == 0) {
+                struct timespec delay = { 0, 1000000L };
+                int attempts;
+                for (attempts = 0; attempts < 3000; ++attempts) {
+                    pid_t parent = getppid();
+                    if (parent != getpid() && parent != intermediate) {
+                        _exit(parent == manager_pid ? 44 : 99);
+                    }
+                    (void)nanosleep(&delay, NULL);
+                }
+                _exit(98);
+            }
+            _exit(0);
+        }
+        result.expected = intermediate;
+        result.called = 0;
+        result.adopted_pid = -1;
+        for (;;) {
+            int drained;
+            descriptor.revents = 0;
+            do {
+                poll_result = poll(&descriptor, 1, 3000);
+            } while (poll_result < 0 && errno == EINTR);
+            assert(poll_result == 1);
+            drained = ninit_manager_child_reaper_drain(
+                reaper, record_exit, &result);
+            assert(drained >= 1);
+            if (result.called == 1 && result.adopted_pid > 0)
+                break;
+        }
+        assert(WIFEXITED(result.status) && WEXITSTATUS(result.status) == 0);
+        assert(WIFEXITED(result.adopted_status));
+        assert(WEXITSTATUS(result.adopted_status) == 44);
+        assert(ninit_manager_child_reaper_drain(reaper, NULL, NULL) == 0);
+    }
 
     ninit_manager_child_reaper_destroy(reaper);
     return 0;
