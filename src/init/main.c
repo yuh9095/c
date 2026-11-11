@@ -34,6 +34,7 @@ struct init_context {
     struct ninit_manager_supervisor *supervisor;
     int stopping;
     int exit_requested;
+    int manager_exit_pending;
     enum shutdown_action action;
 };
 
@@ -114,6 +115,7 @@ handle_child_exit(pid_t pid, int wait_status, void *userdata)
     }
     (void) ninit_manager_supervisor_child_exited(
         context->supervisor, pid, wait_status, &now);
+    context->manager_exit_pending = 1;
 }
 
 static int
@@ -503,6 +505,7 @@ main(int argc, char **argv)
     context.supervisor = &supervisor;
     context.stopping = 0;
     context.exit_requested = 0;
+    context.manager_exit_pending = 0;
     context.action = SHUTDOWN_NONE;
 
     if (ninit_manager_supervisor_start(&supervisor, &now) != 0) {
@@ -544,6 +547,22 @@ main(int argc, char **argv)
         wait_result = ninit_pid1_event_source_wait(
             &events, timeout_ms, handle_signal, &context,
             handle_child_exit, &context);
+        if (context.manager_exit_pending) {
+            context.manager_exit_pending = 0;
+            /*
+             * A dead Manager can no longer run its own subreaper cleanup.
+             * Its service process groups have been reparented to PID 1;
+             * clean them before the supervisor is allowed to restart it.
+             */
+            if (ninit_pid1_cleanup_orphaned_children(5000) < 0) {
+                int cleanup_error = errno;
+                fprintf(stderr,
+                        "ninit-init: orphan cleanup after Manager exit failed: "
+                        "errno=%d (%s); refusing Manager restart\n",
+                        cleanup_error, strerror(cleanup_error));
+                goto out;
+            }
+        }
         if (wait_result < 0 && errno != EINTR) {
             perror("ninit-init: event loop");
             goto shutdown;
@@ -573,6 +592,13 @@ shutdown:
             int wait_result = ninit_pid1_event_source_wait(
                 &events, -1, handle_signal, &context,
                 handle_child_exit, &context);
+            if (context.manager_exit_pending) {
+                context.manager_exit_pending = 0;
+                if (ninit_pid1_cleanup_orphaned_children(5000) < 0) {
+                    perror("ninit-init: orphan cleanup during shutdown");
+                    break;
+                }
+            }
             if (wait_result < 0 && errno != EINTR) {
                 perror("ninit-init: waiting for manager shutdown");
                 break;
