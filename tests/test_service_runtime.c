@@ -50,6 +50,7 @@ main(void)
 
     assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
     assert(pid > 0);
+    assert(getpgid(pid) == pid);
     assert(ninit_service_runtime_exec_pending_count(runtime) == 1);
     assert(ninit_service_runtime_exec_pending_at(
                runtime, 0, &pending_pid, &pending_fd) == 0);
@@ -83,6 +84,7 @@ main(void)
     assert(ninit_service_runtime_exec_pending_at(
                runtime, 0, &stop_pid, &pending_fd) == 0);
     assert(stop_pid > 0 && stop_pid != pid);
+    assert(getpgid(stop_pid) == stop_pid);
     exec_poll.fd = pending_fd;
     exec_poll.events = POLLIN;
     exec_poll.revents = 0;
