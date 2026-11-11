@@ -14,6 +14,10 @@ if unshare --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
 elif unshare --user --map-root-user --mount --pid --fork --mount-proc true >/dev/null 2>&1; then
     namespace_args="--user --map-root-user --mount --pid --fork --mount-proc"
 else
+    if [ "${NINIT_REQUIRE_PID_NAMESPACE_TEST:-0}" = "1" ]; then
+        echo "FAIL: required mount/PID namespace creation is unavailable"
+        exit 1
+    fi
     echo "SKIP: this runner cannot create mount/PID namespaces"
     exit 77
 fi
