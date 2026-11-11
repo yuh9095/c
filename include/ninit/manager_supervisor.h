@@ -8,6 +8,12 @@
 extern "C" {
 #endif
 
+enum ninit_manager_shutdown_action {
+    NINIT_MANAGER_SHUTDOWN_HALT = 1,
+    NINIT_MANAGER_SHUTDOWN_POWEROFF,
+    NINIT_MANAGER_SHUTDOWN_REBOOT
+};
+
 enum ninit_manager_supervisor_state {
     NINIT_MANAGER_STOPPED = 0,
     NINIT_MANAGER_RUNNING,
@@ -70,6 +76,10 @@ int ninit_manager_supervisor_tick(
 /* Closes the private channel. The caller still reaps the child via SIGCHLD. */
 void ninit_manager_supervisor_shutdown(
     struct ninit_manager_supervisor *supervisor);
+/* Send a shutdown action to Manager before closing the private channel. */
+int ninit_manager_supervisor_shutdown_action(
+    struct ninit_manager_supervisor *supervisor,
+    enum ninit_manager_shutdown_action action);
 
 #ifdef __cplusplus
 }
