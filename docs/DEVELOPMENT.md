@@ -161,12 +161,14 @@ An optional `shutdown.target` is discovered from the configured Unit directory.
 Its dependency closure is validated before startup; during orderly Manager
 shutdown it runs only after the normal active-service Stop Job has completed.
 Every Service in that closure must be `Type=oneshot`; Targets are no-op ordering
-nodes. This deliberately avoids starting persistent daemons after the normal
-services have already been stopped. `ExecStart` is the shutdown hook command;
-its child must finish before shutdown proceeds. Shutdown hook timeout policy,
-OpenRC-style `-shutdown`/`-stop` keywords, and `RC_RUNLEVEL`/`RC_REBOOT`
-environment variables remain future work. An absent `shutdown.target` is
-backward-compatible and simply omits this phase.
+nodes. This is validated before the normal startup Job is submitted, avoiding a
+late configuration surprise after services have already stopped. The restriction
+deliberately avoids starting persistent daemons during shutdown. `ExecStart` is
+the shutdown hook command; its child must finish before shutdown proceeds. Each
+hook phase has a 30-second grace period, then receives SIGTERM, followed by
+SIGKILL after another 5 seconds if still active. OpenRC-style `-shutdown`/`-stop`
+keywords and `RC_RUNLEVEL`/`RC_REBOOT` environment variables remain future work.
+An absent `shutdown.target` is backward-compatible and simply omits this phase.
 
 ## Service Runtime（第一版）
 
