@@ -77,8 +77,8 @@ musl 使用同一份源码和配置，将编译器替换为发行版提供的 mu
 当前 Unit Manager 提供内存中的原生 Unit 注册表；独立的 Unit File Loader 可从单个 .service/.target 文件解析定义并注册到该表中。
 
 - 支持 `service` 与 `target` 两种 Unit 类型。
-- 每个 Unit 有唯一名称和可选 description；service 必须提供 ExecStart argv，可选提供 ExecStop argv；target 不允许 ExecStart/ExecStop。
-- ExecStart 与可选 ExecStop 均按 argv 数组深拷贝保存，不经过 shell 字符串解析；ExecStop 仅完成模型和文件解析，异步执行/等待仍由 Service Runtime 后续接入。
+- 每个 Unit 有唯一名称和可选 description；service 必须提供 ExecStart argv，可选提供 ExecStop argv；target 不允许 ExecStart/ExecStop。ExecStop 由 Runtime 异步执行，退出后才向主服务发送 SIGTERM。
+- ExecStart 与可选 ExecStop 均按 argv 数组深拷贝保存，不经过 shell 字符串解析；ExecStop 已接入 Service Runtime：辅助进程通过 exec-error pipe 完成握手，由统一 Child Reaper 回收；辅助进程退出后终止主服务。
 - Unit 可声明 Requires、Wants、After、Before 名称列表。
 - 注册时深拷贝定义及依赖名称；调用者可在 add 返回后释放输入缓冲区。
 - 重复名称返回 `EEXIST`，非法名称/定义返回 `EINVAL`。
@@ -159,7 +159,7 @@ ninit-manager --ipc-fd 3 --unit-dir /etc/ninit/units --target default.target
 - 创建服务子进程的 Manager 必须负责回收它们，并将 PID 和 wait status 交给 `ninit_service_runtime_child_exited()`。PID 1 只回收自己的直接子进程（例如 Manager），运行时模块本身不会调用 wait/waitpid。
 - 进程记录只有在 exec 握手和 child-exit 通知都完成后才释放，兼容短命进程在握手处理前就退出的竞态。
 
-运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。Stop Job 会按逆依赖顺序定位已跟踪的 Service，发送 SIGTERM，并将 Stop Job 项关联到进程记录；只有 child-exit 已由统一 reaper 回收、且 exec handshake 已处理后，才完成该停止项。未运行的 Service 和 Target 可立即完成停止项。Manager 退出时优先提交 Stop Job，等待服务退出；5 秒宽限期后仍存活的进程会收到 SIGKILL，随后仍通过 exec handshake 与统一 child reaper 清理。若没有可用的启动 plan，则使用 SIGTERM 广播和相同的宽限期/强制回收路径。该机制尚未提供 Unit 自定义 TimeoutStopSec、ExecStop、进程组/cgroup 管理或 Restart 策略。
+运行时对象借用 Job Manager；Job Manager 和 Unit Manager 必须比运行时对象活得更久。Stop Job 会按逆依赖顺序定位已跟踪的 Service，发送 SIGTERM，并将 Stop Job 项关联到进程记录；只有 child-exit 已由统一 reaper 回收、且 exec handshake 已处理后，才完成该停止项。未运行的 Service 和 Target 可立即完成停止项。Manager 退出时优先提交 Stop Job，等待服务退出；5 秒宽限期后仍存活的进程会收到 SIGKILL，随后仍通过 exec handshake 与统一 child reaper 清理。若没有可用的启动 plan，则使用 SIGTERM 广播和相同的宽限期/强制回收路径。该机制尚未提供 Unit 自定义 TimeoutStopSec、进程组/cgroup 管理或 Restart 策略。ExecStop 的退出状态目前记录为辅助进程退出事件，失败不会阻止主服务终止。
 
 ## PID 1 executable
 
@@ -178,8 +178,10 @@ grandchildren; the manager owns those processes and its own cleanup.
 Manager restart uses the supervisor's bounded exponential backoff. The PID 1
 poll timeout is derived from the next restart deadline so restarts do not
 require periodic busy polling. This is an initial operational entry point;
-console setup, mount setup, sysinit stages, reboot/poweroff syscall handling,
-and a complete shutdown policy remain future work.
+console setup and mount setup are implemented as early setup stages; a complete
+sysinit/boot/default coordinator integration and process-group/cgroup shutdown
+remain future work. PID 1 now performs policy-gated reboot/poweroff after the
+Manager Stop Job has completed.
 
 
 ## Execution environment detection (initial)
