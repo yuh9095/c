@@ -168,6 +168,25 @@ perform_shutdown(const struct ninit_environment_policy *policy,
 }
 
 static void
+request_manager_shutdown(struct init_context *context,
+                        struct ninit_manager_supervisor *supervisor)
+{
+    enum ninit_manager_shutdown_action action;
+
+    if (context == NULL || context->action == SHUTDOWN_NONE) {
+        ninit_manager_supervisor_shutdown(supervisor);
+        return;
+    }
+    action = context->action == SHUTDOWN_RESTART ?
+        NINIT_MANAGER_SHUTDOWN_REBOOT :
+        context->action == SHUTDOWN_HALT ?
+        NINIT_MANAGER_SHUTDOWN_HALT : NINIT_MANAGER_SHUTDOWN_POWEROFF;
+    if (ninit_manager_supervisor_shutdown_action(supervisor, action) < 0)
+        fprintf(stderr, "ninit-init: failed to send shutdown action to Manager: %s\n",
+                strerror(errno));
+}
+
+static void
 finish_shutdown_request(struct init_context *context,
                         const struct ninit_environment_policy *policy,
                         const struct ninit_environment *environment)
@@ -500,7 +519,7 @@ main(int argc, char **argv)
         }
 
         if (context.stopping) {
-            ninit_manager_supervisor_shutdown(&supervisor);
+            request_manager_shutdown(&context, &supervisor);
             if (supervisor.state == NINIT_MANAGER_STOPPED)
                 finish_shutdown_request(&context, &environment_policy, &environment);
         } else {
@@ -533,7 +552,7 @@ main(int argc, char **argv)
         if (context.stopping &&
             supervisor.state != NINIT_MANAGER_STOPPING &&
             supervisor.state != NINIT_MANAGER_STOPPED) {
-            ninit_manager_supervisor_shutdown(&supervisor);
+            request_manager_shutdown(&context, &supervisor);
         }
 
         if (context.stopping &&
