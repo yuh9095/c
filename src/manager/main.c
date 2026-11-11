@@ -214,6 +214,10 @@ run_shutdown_target(struct ninit_service_runtime *runtime,
 
     if (plan == NULL)
         return 0;
+    /* OpenRC runlevel context for shutdown-target hook processes. */
+    if (setenv("RC_RUNLEVEL", "shutdown", 1) < 0 ||
+        setenv("RC_GOINGDOWN", "YES", 1) < 0)
+        return -1;
     if (validate_shutdown_plan(plan) < 0) {
         fprintf(stderr,
                 "ninit-manager: shutdown.target only supports oneshot services; refusing unsafe daemon start\n");
