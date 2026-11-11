@@ -135,6 +135,10 @@ stop_service_children(struct ninit_service_runtime *runtime,
             return -1;
         }
 
+        unit_timeout = ninit_service_runtime_stop_timeout_ms(runtime);
+        if (unit_timeout >= 0 && (timeout_ms < 0 || unit_timeout < timeout_ms))
+            timeout_ms = unit_timeout;
+
         fds[0].fd = ninit_manager_child_reaper_fd(reaper);
         fds[0].events = POLLIN;
         for (i = 0; i < count; ++i) {
