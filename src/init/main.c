@@ -91,7 +91,7 @@ handle_signal(int signal_number, void *userdata)
     } else if (signal_number == SIGRTMIN + 3) {
         context->action = SHUTDOWN_HALT;
         context->stopping = 1;
-    } else if (signal_number == SIGRTMIN + 5 || signal_number == SIGINT) {
+    } else if (signal_number == SIGRTMIN + 5) {
         context->action = SHUTDOWN_RESTART;
         context->stopping = 1;
     }
