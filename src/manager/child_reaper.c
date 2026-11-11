@@ -103,8 +103,8 @@ fail:
     {
         int saved_errno = errno;
         if (reaper->subreaper_changed)
-            if (reaper->subreaper_changed)
-        (void) prctl(PR_SET_CHILD_SUBREAPER, reaper->previous_subreaper);
+            (void) prctl(PR_SET_CHILD_SUBREAPER,
+                         reaper->previous_subreaper);
         if (pipe_fds[0] >= 0) close(pipe_fds[0]);
         if (pipe_fds[1] >= 0) close(pipe_fds[1]);
         free(reaper);
