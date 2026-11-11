@@ -26,7 +26,7 @@ typedef void (*ninit_child_exit_callback)(pid_t pid,
 int ninit_pid1_reap_children(ninit_child_exit_callback callback,
                              void *userdata);
 
-#define NINIT_PID1_EVENT_MAX_SIGNALS 4
+#define NINIT_PID1_EVENT_MAX_SIGNALS 8
 
 struct ninit_pid1_event_source {
     int read_fd;
@@ -39,7 +39,8 @@ typedef void (*ninit_pid1_signal_callback)(int signal_number,
                                            void *userdata);
 
 /*
- * Install handlers for SIGCHLD, SIGTERM, SIGINT and SIGPWR (where available)
+ * Install handlers for SIGCHLD, SIGTERM, SIGINT, SIGPWR and systemd-compatible
+ * SIGRTMIN+3/+4/+5 shutdown requests (where available)
  * and create a nonblocking self-pipe. One event source may be active per
  * process. The function is independently testable outside PID 1.
  */
