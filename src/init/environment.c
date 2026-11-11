@@ -724,7 +724,8 @@ ninit_environment_get_policy(const struct ninit_environment *environment,
         policy->allow_mount_devtmpfs = 1;
         policy->allow_host_cgroup_management = 1;
     } else if (environment->kind == NINIT_ENVIRONMENT_CONTAINER) {
-        /* Never replace container-manager-provided mounts or reboot its host. */
+        /* Preserve runtime mounts; permit only PID-namespace-local shutdown. */
+        policy->allow_guest_shutdown = 1;
         policy->allow_mount_proc = 0;
         policy->allow_mount_sys = 0;
         policy->allow_mount_devtmpfs = 0;
@@ -739,6 +740,7 @@ ninit_environment_get_policy(const struct ninit_environment *environment,
         policy->allow_mount_sys = 1;
         policy->allow_mount_devtmpfs = 1;
         policy->allow_host_shutdown = 0;
+        policy->allow_guest_shutdown = 1;
         policy->allow_host_cgroup_management = 0;
     }
     /* UNKNOWN deliberately receives the most restrictive policy. */
@@ -767,3 +769,28 @@ ninit_environment_authorize_host_shutdown(
     return 0;
 }
 
+
+
+int
+ninit_environment_authorize_guest_shutdown(
+    const struct ninit_environment_policy *policy,
+    const struct ninit_environment_capabilities *capabilities)
+{
+    if (policy == NULL || capabilities == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!policy->allow_guest_shutdown || policy->allow_host_shutdown) {
+        errno = EPERM;
+        return -1;
+    }
+    if (!capabilities->status_available) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    if (!capabilities->cap_sys_boot) {
+        errno = EPERM;
+        return -1;
+    }
+    return 0;
+}
