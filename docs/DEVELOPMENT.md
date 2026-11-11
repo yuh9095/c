@@ -271,6 +271,16 @@ PID 1 exits successfully and lets the container runtime own the stop/restart
 operation. It does not call `reboot(2)` from a container, because containers
 may lack a private PID namespace or `CAP_SYS_BOOT`; a privileged container
 must not be able to turn an init request into an accidental host reboot.
+Service `[Service] Keywords=` accepts the OpenRC-compatible `-shutdown` and
+`-stop` tags. During the shutdown Stop Job, either tag excludes that service
+from ordered ExecStop/SIGTERM handling. Once the ordered Stop Job completes,
+remaining tracked services receive the final SIGTERM and then the bounded
+SIGKILL fallback. `-stop` is also intended to exclude services from future
+runlevel transitions; only shutdown transitions exist in this implementation
+so far. Shutdown-target hook processes inherit `RC_RUNLEVEL=shutdown` and
+`RC_GOINGDOWN=YES`. `RC_REBOOT` is not exported yet because the current Manager
+IPC shutdown path does not carry the requested halt/poweroff/reboot action.
+
 When the Unit directory contains `shutdown.target`, Manager builds its
 separate dependency plan at startup. On an orderly Manager IPC close it first
 stops the active startup plan in reverse dependency order, then enters the
