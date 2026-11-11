@@ -38,6 +38,7 @@ main(void)
           "Wants=optional.service\n"
           "After=base.target\n"
           "[Service]\n"
+          "Type=oneshot\n"
           "ExecStart=/bin/echo \"hello world\" escaped\\ value\n"
           "ExecStop=/bin/echo \"stopping service\"\n",
           file);
@@ -54,6 +55,7 @@ main(void)
     unit = ninit_unit_manager_find(manager, "demo.service");
     assert(unit != NULL);
     assert(unit->type == NINIT_UNIT_SERVICE);
+    assert(unit->oneshot == 1);
     assert(strcmp(unit->description, "Demo service") == 0);
     assert(unit->requires_count == 1);
     assert(strcmp(unit->requires[0], "base.target") == 0);
