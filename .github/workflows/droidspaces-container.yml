@@ -67,11 +67,18 @@ jobs:
           index="https://images.linuxcontainers.org/images/ubuntu/noble/amd64/default/"
           curl --fail --show-error --location --retry 3 "$index" -o rootfs-index.html
           latest="$(python3 - rootfs-index.html <<'PY'
+          import html
           import re
           import sys
+          from urllib.parse import unquote
 
-          html = open(sys.argv[1], encoding="utf-8").read()
-          versions = re.findall(r'href="(\d{8}_\d{2}:\d{2}/)"', html)
+          page = open(sys.argv[1], encoding="utf-8").read()
+          hrefs = re.findall(r'href="([^"]+/)"', page)
+          versions = []
+          for href in hrefs:
+              decoded = unquote(html.unescape(href))
+              if re.fullmatch(r"\\d{8}_\\d{2}:\\d{2}/", decoded):
+                  versions.append(decoded)
           if not versions:
               raise SystemExit("No dated Ubuntu Noble rootfs image found")
           print(sorted(versions)[-1])
