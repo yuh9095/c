@@ -66,6 +66,31 @@ int main(void)
     assert(ninit_job_manager_get_info(jobs, id, &info) == 0);
     assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 3);
 
+    /* OpenRC -shutdown excludes a service from ordered stop, but does not
+     * remove it from the plan's completion accounting. */
+    {
+        struct ninit_unit_spec skipped = { 0 };
+        const char *skip_requires[] = { "skip.service" };
+        const char *skip_argv[] = { "/bin/true", NULL };
+        skipped.name = "skip.service";
+        skipped.type = NINIT_UNIT_SERVICE;
+        skipped.exec_start_argv = skip_argv;
+        skipped.exec_start_argc = 1;
+        skipped.keyword_no_shutdown = 1;
+        assert(ninit_unit_manager_add(units, &skipped) == 0);
+        add_target(units, "skip.target", skip_requires, 1, NULL, 0);
+        ninit_dependency_plan_destroy(plan);
+        plan = NULL;
+        assert(ninit_dependency_plan_build(units, "skip.target", &plan) == 0);
+        assert(ninit_job_manager_submit_stop(jobs, plan, 1, &id) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 1);
+        assert(strcmp(unit->name, "skip.target") == 0);
+        assert(ninit_job_manager_complete(jobs, id, index, 1, 0) == 0);
+        assert(ninit_job_manager_dispatch(jobs, id, &unit, &index) == 0);
+        assert(ninit_job_manager_get_info(jobs, id, &info) == 0);
+        assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 2);
+    }
+
     ninit_dependency_plan_destroy(plan);
     ninit_job_manager_destroy(jobs);
     ninit_unit_manager_destroy(units);
