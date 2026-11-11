@@ -52,6 +52,7 @@ struct ninit_unit {
     size_t before_count;
     char **exec_stop_argv;
     size_t exec_stop_argc;
+    int oneshot;
 };
 
 #ifdef __cplusplus
