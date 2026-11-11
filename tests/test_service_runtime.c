@@ -101,6 +101,8 @@ main(void)
     assert(info.state == NINIT_JOB_SUCCEEDED && info.completed_count == 1);
 
     /* Oneshot Start jobs complete only after the child exits successfully. */
+    ninit_dependency_plan_destroy(plan);
+    plan = NULL;
     memset(&spec, 0, sizeof(spec));
     spec.name = "oneshot.service";
     spec.type = NINIT_UNIT_SERVICE;
