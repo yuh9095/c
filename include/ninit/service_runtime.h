@@ -37,6 +37,13 @@ int ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                                    uint64_t job_id,
                                    pid_t *started_pid);
 
+/* Milliseconds until the nearest per-service stop deadline; -1 if none. */
+int ninit_service_runtime_stop_timeout_ms(
+    const struct ninit_service_runtime *runtime);
+/* Expire stop operations whose TimeoutStopSec deadline has passed. */
+int ninit_service_runtime_expire_stop_timeouts(
+    struct ninit_service_runtime *runtime);
+
 /* Number of pending ExecStart and ExecStop handshakes. */
 size_t ninit_service_runtime_exec_pending_count(
     const struct ninit_service_runtime *runtime);
