@@ -1,4 +1,4 @@
-name: Droidspaces Linux integration
+name: Droidspaces Linux container integration
 
 on:
   push:
@@ -9,82 +9,128 @@ on:
 permissions:
   contents: read
 
-# Do not cancel an active container test: it owns a nested PID namespace.
 concurrency:
   group: droidspaces-linux-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   droidspaces-linux:
-    # This runner must be installed INSIDE the Droidspaces Linux container.
-    # Keep the default self-hosted/linux/ARM64 labels and add droidspaces.
-    runs-on: [self-hosted, linux, ARM64, droidspaces]
-    timeout-minutes: 20
+    # Use an ordinary ephemeral GitHub-hosted Linux VM. Droidspaces itself
+    # creates the test container on this runner; no self-hosted runner needed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     defaults:
       run:
         shell: bash
 
     steps:
-      - name: Verify Droidspaces Linux runner
-        run: |
-          set -Eeuo pipefail
-
-          echo '=== Architecture ==='
-          case "$(uname -m)" in
-            aarch64|arm64) ;;
-            *) echo "Expected ARM64, got: $(uname -m)" >&2; exit 1 ;;
-          esac
-
-          echo '=== Linux environment ==='
-          test -r /proc/1/comm
-          test -r /proc/self/status
-          cat /etc/os-release || true
-          uname -a
-          printf 'PID 1: '
-          cat /proc/1/comm
-          printf 'PID namespace: '
-          readlink /proc/self/ns/pid
-          printf 'Mount namespace: '
-          readlink /proc/self/ns/mnt
-          id
-
-          echo '=== Required tools ==='
-          for tool in cmake ninja gcc git unshare ctest; do
-            command -v "$tool"
-          done
-
-      - name: Verify nested namespace permissions
-        run: |
-          set -Eeuo pipefail
-
-          # The integration test needs a real nested mount + PID namespace.
-          # Try the container's normal namespace permissions first, then the
-          # rootless user-namespace route. Never silently skip this check.
-          if unshare --kill-child --mount --pid --fork --mount-proc true; then
-            echo 'Nested PID/mount namespace: direct mode available'
-          elif unshare --kill-child --user --map-root-user --mount --pid --fork --mount-proc true; then
-            echo 'Nested PID/mount namespace: rootless user namespace available'
-          else
-            echo 'Droidspaces does not permit the nested namespaces required by this test.' >&2
-            echo 'Enable nested PID/mount namespaces for this Linux container.' >&2
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug
+      - name: Install host prerequisites
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build debootstrap \
+            curl ca-certificates xz-utils util-linux
 
-      - name: Build
-        run: cmake --build build --parallel 2
-
-      - name: Run complete test suite
+      - name: Install Droidspaces Linux backend
         env:
-          NINIT_REQUIRE_PID_NAMESPACE_TEST: "1"
-        run: ctest --test-dir build --output-on-failure --timeout 60
+          DROIDSPACES_VERSION: "7.2.0"
+          DROIDSPACES_COMMIT: "cdadb9eb"
+        run: |
+          set -Eeuo pipefail
+          archive="droidspaces-v${DROIDSPACES_VERSION}-${DROIDSPACES_COMMIT}.tar.gz"
+          base="https://github.com/ravindu644/Droidspaces-OSS/releases/download/v${DROIDSPACES_VERSION}"
 
-      - name: Show test inventory
+          curl --fail --show-error --location --retry 3 \
+            "${base}/${archive}" -o "${archive}"
+          curl --fail --show-error --location --retry 3 \
+            "${base}/SHA256SUMS" -o SHA256SUMS
+          grep "  ${archive}$" SHA256SUMS | sha256sum --check -
+
+          tar -xzf "${archive}"
+          binary="$(find . -type f -path '*/x86_64/droidspaces' -print -quit)"
+          test -n "$binary"
+          sudo install -D -m 0755 "$binary" /usr/local/bin/droidspaces
+
+          sudo droidspaces version
+          sudo droidspaces check
+
+      - name: Build Ninit
+        run: |
+          set -Eeuo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel 2
+
+      - name: Boot Ninit inside a real Droidspaces container and test
+        env:
+          ROOTFS: ${{ runner.temp }}/ninit-droidspaces-rootfs
+          CONTAINER_NAME: ninit-ci
+        run: |
+          set -Eeuo pipefail
+
+          cleanup() {
+            sudo droidspaces --name="$CONTAINER_NAME" stop >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          # Create a clean Ubuntu rootfs on the GitHub-hosted Linux VM.
+          sudo debootstrap --variant=minbase noble "$ROOTFS" \
+            http://archive.ubuntu.com/ubuntu
+
+          # Install the just-built Ninit binaries into the container rootfs.
+          sudo cmake --install build --prefix "$ROOTFS/usr"
+          sudo mkdir -p "$ROOTFS/etc/ninit/units"
+          sudo ln -sfn /usr/bin/ninit-init "$ROOTFS/sbin/init"
+
+          # Supply the three boot-coordinator targets as native Ninit units.
+          for target in sysinit boot default; do
+            sudo tee "$ROOTFS/etc/ninit/units/$target.target" >/dev/null <<EOF
+          [Unit]
+          Description=Ninit CI $target target
+          [Target]
+          EOF
+          done
+
+          # Start the actual Droidspaces Linux container with Ninit as PID 1.
+          sudo droidspaces \
+            --name="$CONTAINER_NAME" \
+            --rootfs="$ROOTFS" \
+            --net=host \
+            --bind-mount="$GITHUB_WORKSPACE:/workspace" \
+            --volatile \
+            start
+
+          # Verify that Droidspaces booted our init, not a shell or systemd.
+          sudo droidspaces --name="$CONTAINER_NAME" run sh -ec '
+            printf "Container PID 1: "
+            cat /proc/1/comm
+            test "$(cat /proc/1/comm)" = "ninit-init"
+            test -x /workspace/build/ninit-manager
+          '
+
+          # Install only the test runner and namespace utilities in the guest.
+          sudo droidspaces --name="$CONTAINER_NAME" run apt-get update
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            apt-get install -y --no-install-recommends cmake util-linux
+
+          # Run CTest from inside the Droidspaces container. The mandatory
+          # namespace test must execute; it may not be reported as SKIPPED.
+          sudo droidspaces --name="$CONTAINER_NAME" run \
+            env NINIT_REQUIRE_PID_NAMESPACE_TEST=1 \
+            ctest --test-dir /workspace/build --output-on-failure --timeout 60
+
+          echo "Droidspaces container test completed successfully."
+
+      - name: Show host and container diagnostics
         if: always()
-        run: ctest --test-dir build --show-only
+        run: |
+          set +e
+          uname -a
+          sudo droidspaces show
+          sudo droidspaces --name=ninit-ci info
