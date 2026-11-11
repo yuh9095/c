@@ -22,6 +22,8 @@ struct service_process {
     int stop_exec_fd;
     int stop_exec_confirmed;
     int stop_child_exited;
+    int stop_wait_status;
+    int stop_success;
     int stop_signal_sent;
     int exec_confirmed;
     int start_completion_done;
@@ -83,10 +85,38 @@ complete_stop_if_ready(struct ninit_service_runtime *runtime,
         !process->exec_confirmed || process->stop_pid > 0)
         return 0;
     if (ninit_job_manager_complete(runtime->jobs, process->stop_job_id,
-                                   process->stop_plan_index, 1, 0) < 0)
+                                   process->stop_plan_index,
+                                   process->stop_success,
+                                   process->stop_success ? 0 : EIO) < 0)
         return -1;
     process->stop_requested = 0;
     return 1;
+}
+
+static int
+advance_stop_helper(struct ninit_service_runtime *runtime,
+                    struct service_process *process)
+{
+    int e;
+
+    if (!process->stop_requested || !process->stop_exec_confirmed ||
+        !process->stop_child_exited)
+        return 0;
+    if (process->stop_pid > 0)
+        process->stop_pid = -1;
+    if (!WIFEXITED(process->stop_wait_status) ||
+        WEXITSTATUS(process->stop_wait_status) != 0)
+        process->stop_success = 0;
+    if (!process->stop_signal_sent) {
+        if (kill(process->pid, SIGTERM) == 0 || errno == ESRCH) {
+            process->stop_signal_sent = 1;
+        } else {
+            e = errno;
+            process->stop_success = 0;
+            process->stop_signal_sent = 1;
+        }
+    }
+    return 0;
 }
 
 static void
@@ -233,6 +263,7 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
                 errno = EBUSY; return -1;
             }
             process->stop_requested = 1;
+            process->stop_success = 1;
             process->stop_job_id = job_id;
             process->stop_plan_index = plan_index;
             if (unit->exec_stop_argc != 0) {
@@ -249,6 +280,7 @@ ninit_service_runtime_dispatch(struct ninit_service_runtime *runtime,
             } else {
                 process->stop_exec_confirmed = 1;
                 process->stop_child_exited = 1;
+                process->stop_success = 1;
                 if (kill(process->pid, SIGTERM) == 0 || errno == ESRCH)
                     process->stop_signal_sent = 1;
                 else {
@@ -367,17 +399,10 @@ ninit_service_runtime_check_exec(struct ninit_service_runtime *r, pid_t pid)
         e = result < 0 ? errno : 0;
         close(p->stop_exec_fd); p->stop_exec_fd = -1;
         p->stop_exec_confirmed = 1;
-        if (p->stop_child_exited && p->stop_pid > 0) {
-            p->stop_pid = -1;
-            if (kill(p->pid, SIGTERM) == 0 || errno == ESRCH)
-                p->stop_signal_sent = 1;
-            else {
-                e = errno;
-                (void)ninit_job_manager_complete(r->jobs, p->stop_job_id,
-                    p->stop_plan_index, 0, e);
-                p->stop_requested = 0;
-            }
-        }
+        if (result < 0)
+            p->stop_success = 0;
+        if (advance_stop_helper(r, p) < 0)
+            return -1;
     } else {
         if (p->exec_confirmed) { errno = EALREADY; return -1; }
         result = ninit_service_executor_check_exec(p->exec_fd);
@@ -414,18 +439,9 @@ ninit_service_runtime_child_exited(struct ninit_service_runtime *r,
     if (p != NULL) {
         if (p->stop_child_exited) { errno = EALREADY; return -1; }
         p->stop_child_exited = 1;
-        if (p->stop_exec_confirmed) {
-            p->stop_pid = -1;
-            if (kill(p->pid, SIGTERM) == 0 || errno == ESRCH)
-                p->stop_signal_sent = 1;
-            else {
-                int e = errno;
-                (void)ninit_job_manager_complete(r->jobs, p->stop_job_id,
-                    p->stop_plan_index, 0, e);
-                p->stop_requested = 0;
-                errno = e; return -1;
-            }
-        }
+        p->stop_wait_status = wait_status;
+        if (advance_stop_helper(r, p) < 0)
+            return -1;
         if (p->child_exited && p->exec_confirmed && p->stop_pid <= 0) {
             if (complete_stop_if_ready(r, p) < 0) return -1;
             remove_process(r, p);
