@@ -86,6 +86,8 @@ jobs:
           # Install the just-built Ninit binaries into the container rootfs.
           sudo cmake --install build --prefix "$ROOTFS/usr"
           sudo mkdir -p "$ROOTFS/etc/ninit/units"
+          # The guest bind-mount target must exist before Droidspaces starts.
+          sudo mkdir -p "$ROOTFS$GITHUB_WORKSPACE"
           sudo ln -sfn /usr/bin/ninit-init "$ROOTFS/sbin/init"
 
           # Supply the three boot-coordinator targets as native Ninit units.
@@ -115,7 +117,10 @@ jobs:
             test "$(readlink /proc/1/exe)" = "/usr/bin/ninit-init"
             printf "Container PID 1 command: "
             tr "\000" " " </proc/1/cmdline; echo
+            test -d "$GITHUB_WORKSPACE"
             test -x "$GITHUB_WORKSPACE/build/ninit-manager"
+            printf "Workspace mount: "
+            mountpoint "$GITHUB_WORKSPACE"
           '
 
           # Install only the test runner and namespace utilities in the guest.
