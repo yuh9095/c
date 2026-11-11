@@ -4,6 +4,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <limits.h>
+#include <stdint.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -171,6 +174,117 @@ ninit_manager_child_reaper_drain(
             continue;
         return -1;
     }
+}
+
+static int
+read_child_list(struct ninit_manager_child_reaper *reaper,
+                char *buffer, size_t capacity, size_t *length)
+{
+    char path[128];
+    int fd;
+    ssize_t bytes;
+    int n;
+
+    if (reaper == NULL || reaper != active_reaper ||
+        buffer == NULL || capacity < 2 || length == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    n = snprintf(path, sizeof(path), "/proc/self/task/%ld/children",
+                 (long)getpid());
+    if (n < 0 || (size_t)n >= sizeof(path)) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    bytes = read(fd, buffer, capacity - 1);
+    {
+        int saved = errno;
+        close(fd);
+        errno = saved;
+    }
+    if (bytes < 0)
+        return -1;
+    if ((size_t)bytes == capacity - 1) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    buffer[bytes] = '\0';
+    *length = (size_t)bytes;
+    return 0;
+}
+
+int
+ninit_manager_child_reaper_has_children(
+    struct ninit_manager_child_reaper *reaper)
+{
+    char buffer[65536];
+    size_t length;
+    size_t i;
+
+    if (read_child_list(reaper, buffer, sizeof(buffer), &length) < 0)
+        return -1;
+    for (i = 0; i < length; ++i)
+        if (buffer[i] != ' ' && buffer[i] != '\n' &&
+            buffer[i] != '\t' && buffer[i] != '\r')
+            return 1;
+    return 0;
+}
+
+int
+ninit_manager_child_reaper_signal_children(
+    struct ninit_manager_child_reaper *reaper, int signal_number)
+{
+    char buffer[65536];
+    size_t length, offset = 0;
+    int signalled = 0;
+    int first_error = 0;
+
+    if (signal_number < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (read_child_list(reaper, buffer, sizeof(buffer), &length) < 0)
+        return -1;
+    while (offset < length) {
+        char *end;
+        long value;
+        pid_t pid, pgid;
+
+        while (offset < length &&
+               (buffer[offset] == ' ' || buffer[offset] == '\n' ||
+                buffer[offset] == '\t' || buffer[offset] == '\r'))
+            ++offset;
+        if (offset == length)
+            break;
+        errno = 0;
+        value = strtol(buffer + offset, &end, 10);
+        if (errno != 0 || end == buffer + offset || value <= 0 ||
+            value > INT_MAX) {
+            errno = EIO;
+            return -1;
+        }
+        offset = (size_t)(end - buffer);
+        pid = (pid_t)value;
+        pgid = getpgid(pid);
+        if (pgid > 0) {
+            if (kill(-pgid, signal_number) == 0)
+                ++signalled;
+            else if (errno != ESRCH && first_error == 0)
+                first_error = errno;
+        } else if (kill(pid, signal_number) == 0) {
+            ++signalled;
+        } else if (errno != ESRCH && first_error == 0) {
+            first_error = errno;
+        }
+    }
+    if (first_error != 0) {
+        errno = first_error;
+        return -1;
+    }
+    return signalled;
 }
 
 void
