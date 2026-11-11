@@ -15,6 +15,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/reboot.h>
+#include <unistd.h>
 
 #define DEFAULT_MANAGER_PATH "/usr/bin/ninit-manager"
 #define DEFAULT_CONSOLE_PATH "/dev/console"
