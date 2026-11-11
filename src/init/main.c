@@ -551,7 +551,7 @@ main(int argc, char **argv)
             context.manager_exit_pending = 0;
             /*
              * A dead Manager can no longer run its own subreaper cleanup.
-             * Its service process groups have been reparented to PID 1;
+             * Its remaining descendants have been reparented to PID 1;
              * clean them before the supervisor is allowed to restart it.
              */
             if (ninit_pid1_cleanup_orphaned_children(5000) < 0) {
