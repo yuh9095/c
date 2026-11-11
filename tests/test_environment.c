@@ -302,6 +302,38 @@ main(void)
     assert(policy.allow_host_cgroup_management == 0);
 
     /*
+     * Containers and VMs may request guest-local shutdown, but never
+     * authorize a host-level reboot. Effective CAP_SYS_BOOT is still required.
+     */
+    memset(&shutdown_capabilities, 0, sizeof(shutdown_capabilities));
+    shutdown_capabilities.status_available = 1;
+    shutdown_capabilities.cap_sys_boot = 1;
+    memset(&environment, 0, sizeof(environment));
+    environment.kind = NINIT_ENVIRONMENT_CONTAINER;
+    ninit_environment_get_policy(&environment, &policy);
+    assert(policy.allow_guest_shutdown == 1);
+    assert(policy.allow_host_shutdown == 0);
+    assert(ninit_environment_authorize_guest_shutdown(
+               &policy, &shutdown_capabilities) == 0);
+    assert(ninit_environment_authorize_host_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    shutdown_capabilities.cap_sys_boot = 0;
+    assert(ninit_environment_authorize_guest_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    assert(errno == EPERM);
+    shutdown_capabilities.cap_sys_boot = 1;
+    environment.kind = NINIT_ENVIRONMENT_VIRTUAL_MACHINE;
+    ninit_environment_get_policy(&environment, &policy);
+    assert(policy.allow_guest_shutdown == 1);
+    assert(ninit_environment_authorize_guest_shutdown(
+               &policy, &shutdown_capabilities) == 0);
+    environment.kind = NINIT_ENVIRONMENT_UNKNOWN;
+    ninit_environment_get_policy(&environment, &policy);
+    assert(ninit_environment_authorize_guest_shutdown(
+               &policy, &shutdown_capabilities) == -1);
+    assert(errno == EPERM);
+
+    /*
      * Host reboot/poweroff requires both explicit host policy and an
      * observable effective CAP_SYS_BOOT bit. Containers and guests never
      * authorize host-level shutdown.
