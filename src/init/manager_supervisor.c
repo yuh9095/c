@@ -138,6 +138,8 @@ ninit_manager_supervisor_start(
         return NINIT_IPC_INVALID_ARGUMENT;
     }
 
+    /* A new explicit start also resumes supervision after a rejected shutdown. */
+    supervisor->stopping = 0;
     result = ninit_manager_start_with_config(supervisor->manager_path,
                                  supervisor->unit_dir, supervisor->target,
                                  supervisor->handshake_timeout_ms,
@@ -149,7 +151,6 @@ ninit_manager_supervisor_start(
 
     supervisor->started_at = *now;
     supervisor->state = NINIT_MANAGER_RUNNING;
-    supervisor->stopping = 0;
     return NINIT_IPC_OK;
 }
 
