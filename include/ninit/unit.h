@@ -32,6 +32,7 @@ struct ninit_unit_spec {
     size_t before_count;
     const char *const *exec_stop_argv;
     size_t exec_stop_argc;
+    int oneshot;
 };
 
 /* Unit objects are owned by the manager and remain valid until removal/destruction. */
