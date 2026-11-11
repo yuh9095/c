@@ -1,59 +1,43 @@
-# Droidspaces 容器集成 CI
+# Droidspaces Linux 容器集成 CI
 
-本仓库有两套互相独立的 CI：
+本项目使用普通 GitHub-hosted runner 运行 Droidspaces Linux 后端，不需要 self-hosted Runner，也不需要 Android 手机参与 CI。
 
-- `.github/workflows/ci.yml`：GitHub-hosted runner 上的 glibc/musl 构建和普通单元测试。
-- `.github/workflows/droidspaces-container.yml`（工作流名称：`Droidspaces Linux integration`）：在真实 Droidspaces Linux 容器内运行的 ARM64 集成测试，必须成功创建嵌套 mount/PID namespace；不能像普通 CI 一样把该测试标记为 skipped。
+工作流：`.github/workflows/droidspaces-container.yml`
 
-## 运行模型
+## 运行方式
 
-Droidspaces CI 使用注册在本仓库的 self-hosted GitHub Actions runner。Runner 必须安装并运行在 Droidspaces 管理的 Linux 容器内部，而不是 Android 的 Termux/PRoot shell，也不是仅仅在 GitHub runner 上执行一个模拟脚本。
+每次向 `bootstrap/project-skeleton` 推送提交，或手动触发 `workflow_dispatch` 时，GitHub Actions 会分配一台全新的 `ubuntu-24.04` x86_64 Linux VM，并在 VM 内执行：
 
-当前开发测试环境是 Droidspaces v7.1.0 的 Artix Linux aarch64 容器 `armtix2`，容器内由 OpenRC 作为 PID 1。可以先在这个容器里试运行 runner；GitHub Actions 支持 Linux ARM64 runner，但官方列出的 Linux 发行版没有明确列出 Artix，因此 Artix 上 runner 的兼容性需要实际验证。如果 runner 自身不能正常启动，可在 Droidspaces 中使用 Debian/Ubuntu ARM64 rootfs 作为 runner 容器。
+1. 安装 Droidspaces Linux x86_64 后端（固定使用 v7.2.0，并校验发布包 SHA256）。
+2. 使用 debootstrap 创建干净的 Ubuntu 24.04 rootfs。
+3. 编译 Ninit，并将 `ninit-init`、`ninit-manager`、`ninitctl` 安装进 rootfs。
+4. 将 rootfs 的 `/sbin/init` 指向 `/usr/bin/ninit-init`。
+5. 通过 Droidspaces 启动真实 Linux 容器。Ninit 必须成为该容器的 PID 1。
+6. 将工作区 bind-mount 到容器的 `/workspace`，在容器内安装 CTest 和 util-linux。
+7. 在 Droidspaces 容器内部运行整个 CTest 套件。
+8. 测试结束后停止容器；Runner 是临时 VM，不保留测试状态。
 
-## 一次性配置 Runner
+这不是用普通 `unshare` 或 Docker 替代 Droidspaces：工作流会下载并执行 Droidspaces 自己的 Linux 后端，调用它创建、启动和停止容器。
 
-1. 在 Droidspaces 中启动 Linux 容器，并以普通用户进入容器。不要把 GitHub runner 注册到 Android 宿主机。
-2. 安装构建和运行依赖。Artix 示例：
+## 测试边界
 
-   ```sh
-   sudo pacman -S --needed base-devel cmake ninja git curl tar util-linux icu libunwind openssl zlib krb5
-   ```
+- CI 主机：GitHub-hosted `ubuntu-24.04` x86_64。
+- Droidspaces 后端：Linux x86_64，v7.2.0。
+- Guest rootfs：Ubuntu Noble amd64。
+- Guest PID 1：本项目的 `ninit-init`。
+- Guest 中的 Manager：本项目的 `ninit-manager`。
+- CTest 在 Guest 容器内部执行；PID namespace 集成测试还会尝试创建嵌套 mount/PID namespace。
+- 设置 `NINIT_REQUIRE_PID_NAMESPACE_TEST=1`，因此 namespace 集成测试不能以 SKIPPED 结束；能力不足时 job 必须失败。
 
-3. 打开 GitHub 仓库的 **Settings → Actions → Runners → New self-hosted runner**，选择 Linux / ARM64，按 GitHub 页面给出的命令下载并解压 runner。
-4. 在 runner 配置步骤中添加自定义标签 `droidspaces`。默认的 `self-hosted`、`linux`、`ARM64` 标签也要保留。注册命令中的临时 token 只在终端使用，不要提交到仓库或粘贴到日志。
-5. 以普通用户运行 runner：
+## 安全与权限
 
-   ```sh
-   ./run.sh
-   ```
+Droidspaces 是特权容器运行时，需要在 Linux 主机上以 root 启动。工作流因此只在隔离、一次性的 GitHub-hosted VM 上执行，不使用持久 self-hosted runner，也不向工作流提供额外 secrets。
 
-   首轮先在 Droidspaces 容器的持久终端会话（例如 tmux）中前台运行，确认 GitHub 页面显示 runner 为 Idle。不要先把 runner 配成 root 服务。
+当前只在 `bootstrap/project-skeleton` 分支 push 和手动触发时运行，不对 fork 的 `pull_request` 执行特权容器代码。
 
-## 先验证嵌套 namespace
+## 与普通 CI 的关系
 
-在 runner 用户身份下执行：
+- `.github/workflows/ci.yml`：普通 GitHub-hosted runner 上的 glibc/musl 构建与单元测试。
+- `.github/workflows/droidspaces-container.yml`：在 Droidspaces Linux 容器内启动 Ninit 为 PID 1，并运行完整测试套件。
 
-```sh
-unshare --mount --pid --fork --mount-proc true
-```
-
-如果容器不允许直接创建 namespace，再验证 rootless 路径：
-
-```sh
-unshare --user --map-root-user --mount --pid --fork --mount-proc true
-```
-
-至少有一种必须成功。CI 会再次通过实际集成测试验证，而不是只依赖这个探测命令。若两种都失败，先检查 Droidspaces 容器的 nested-container / user-namespace 权限，不要通过关闭测试或把 skip 当成通过来绕过。
-
-## 工作流行为
-
-- 触发方式：仅 `bootstrap/project-skeleton` 分支的 push，或手动 `workflow_dispatch`。如需测试其他可信分支，应显式修改工作流的 `push.branches`，不要开放给 fork PR。
-- 不监听 `pull_request`：self-hosted runner 位于有权限的 Droidspaces 容器内，不能让来自 fork 的不可信代码自动获得执行机会。
-- Runner 标签：`[self-hosted, linux, ARM64, droidspaces]`。
-- 工作流首先检查 ARM64、Linux 基础信息和必需工具，再实际探测嵌套 PID/mount namespace（先直接模式，失败后尝试 rootless user namespace）；两种方式都失败则立即失败。随后编译 Ninit，运行全部 CTest，并设置 `NINIT_REQUIRE_PID_NAMESPACE_TEST=1`。如果 PID/mount namespace 测试无法启动，整个 job 失败，不会报告绿色的 skipped。
-- 真实集成测试会让 Ninit 在嵌套 PID namespace 中成为 PID 1，触发 Manager 崩溃，验证 PID 1 清理遗留服务后代并重启 Manager，最后通过容器式 SIGTERM 路径退出。它不会调用宿主机 reboot。
-
-## 安全边界
-
-Self-hosted runner 会执行仓库中的任意构建脚本。只允许可信的仓库写入者向触发该工作流的分支推送代码；不要为 fork PR 启用此 runner。Runner 使用普通用户运行，只有在 Droidspaces 容器允许 rootless nested namespace 时才可执行集成测试。不要把 runner 注册 token、PAT 或其他凭据写入仓库。
+两套 CI 分开报告。普通 CI 通过不代表 Droidspaces 容器集成测试已经通过。
