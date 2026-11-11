@@ -152,6 +152,46 @@ main(void)
     assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
     assert(info.state == NINIT_JOB_FAILED && info.error_code == EIO);
 
+    /* ExecStop exec failure preserves ENOENT in the Stop Job result. */
+    ninit_dependency_plan_destroy(plan);
+    plan = NULL;
+    memset(&spec, 0, sizeof(spec));
+    spec.name = "stop-exec-fail.service";
+    spec.type = NINIT_UNIT_SERVICE;
+    spec.exec_start_argv = argv;
+    spec.exec_start_argc = 2;
+    spec.exec_stop_argv = (const char *const[]){ "/ninit/no-such-stop-helper", NULL };
+    spec.exec_stop_argc = 1;
+    assert(ninit_unit_manager_add(units, &spec) == 0);
+    assert(ninit_dependency_plan_build(units, "stop-exec-fail.service", &plan) == 0);
+    assert(ninit_job_manager_submit_start(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, &pid) == 1);
+    assert(ninit_service_runtime_exec_pending_at(runtime, 0, &pending_pid,
+                                                  &pending_fd) == 0);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    do { result = poll(&exec_poll, 1, 3000); } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, pid) == 1);
+    assert(ninit_job_manager_submit_stop(jobs, plan, 1, &job_id) == 0);
+    assert(ninit_service_runtime_dispatch(runtime, job_id, NULL) == 1);
+    assert(ninit_service_runtime_exec_pending_at(runtime, 0, &stop_pid,
+                                                  &pending_fd) == 0);
+    exec_poll.fd = pending_fd;
+    exec_poll.events = POLLIN;
+    do { result = poll(&exec_poll, 1, 3000); } while (result < 0 && errno == EINTR);
+    assert(result == 1);
+    assert(ninit_service_runtime_check_exec(runtime, stop_pid) == -1);
+    assert(errno == ENOENT);
+    assert(waitpid(stop_pid, &status, 0) == stop_pid);
+    assert(ninit_service_runtime_child_exited(runtime, stop_pid, status) == 0);
+    assert(waitpid(pid, &status, 0) == pid);
+    assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+    assert(ninit_service_runtime_child_exited(runtime, pid, status) == 0);
+    assert(ninit_job_manager_get_info(jobs, job_id, &info) == 0);
+    assert(info.state == NINIT_JOB_FAILED && info.error_code == ENOENT);
+    assert(ninit_service_runtime_tracked_count(runtime) == 0);
+
     /* A main service crash during ExecStop fails the stop and cancels the helper. */
     ninit_dependency_plan_destroy(plan);
     plan = NULL;
