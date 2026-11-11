@@ -39,6 +39,7 @@ main(void)
           "After=base.target\n"
           "[Service]\n"
           "Type=oneshot\n"
+          "Keywords=-shutdown -stop\n"
           "ExecStart=/bin/echo \"hello world\" escaped\\ value\n"
           "ExecStop=/bin/echo \"stopping service\"\n",
           file);
@@ -56,6 +57,8 @@ main(void)
     assert(unit != NULL);
     assert(unit->type == NINIT_UNIT_SERVICE);
     assert(unit->oneshot == 1);
+    assert(unit->keyword_no_shutdown == 1);
+    assert(unit->keyword_no_stop == 1);
     assert(strcmp(unit->description, "Demo service") == 0);
     assert(unit->requires_count == 1);
     assert(strcmp(unit->requires[0], "base.target") == 0);
