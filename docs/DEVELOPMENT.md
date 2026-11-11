@@ -193,8 +193,15 @@ can be overridden with `--manager`, `--unit-dir`, and `--target`.
 PID 1 handles SIGTERM, SIGINT, and SIGPWR as shutdown requests. It closes the
 manager IPC channel and waits for the manager child to exit. SIGCHLD handling
 always uses the centralized nonblocking waitpid loop, then routes the reaped
-manager PID to the supervisor. PID 1 does not wait for or manage service
-grandchildren; the manager owns those processes and its own cleanup.
+manager PID to the supervisor. When the Manager exits for any reason, PID 1
+uses `/proc/self/task/<pid>/children` to enumerate service descendants that
+were reparented to it, sends SIGTERM to their isolated process groups, waits
+the configured grace period, escalates to SIGKILL, and reaps/rescans until no
+children remain. This cleanup runs before the supervisor may restart Manager,
+so a Manager crash cannot leave its previous service tree running alongside
+the replacement. The fallback is intentionally scoped to PID 1's own direct
+children and their process groups; it does not scan or signal unrelated host
+processes. Procfs must be mounted and readable for this emergency inventory.
 
 Manager restart uses the supervisor's bounded exponential backoff. The PID 1
 poll timeout is derived from the next restart deadline so restarts do not
